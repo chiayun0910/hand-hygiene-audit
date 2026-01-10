@@ -24,7 +24,7 @@ wheels/
 *.egg
 
 # Streamlit
-.streamlit/secrets.toml
+# .streamlit/secrets.toml  # 暫時註解，允許上傳 secrets
 
 # Google Cloud
 *.json
