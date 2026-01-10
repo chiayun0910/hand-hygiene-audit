@@ -140,14 +140,14 @@ with col1:
     st.session_state.auditor = auditor
 
 with col2:
+    departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W", 
+                   "內科", "外科", "精神科", "復健科", "放射科", "檢驗科", 
+                   "松1.2", "松3", "松5.6", "康", "日照", "其他(請註明)"]
+    
     department = st.selectbox(
         "🏥 隸屬稽核單位/病房",
-        ["ER", "HDR", "OPD", "ICU", "RCW", "7W", "8W", "9W", "11W", 
-         "內科", "外科", "精神科", "復健科", "松1.2", "松3", "松5.6", 
-         "康", "日照", "其他(請註明)"],
-        index=["ER", "HDR", "OPD", "ICU", "RCW", "7W", "8W", "9W", "11W", 
-               "內科", "外科", "精神科", "復健科", "松1.2", "松3", "松5.6", 
-               "康", "日照", "其他(請註明)"].index(st.session_state.department) if st.session_state.department in ["ER", "HDR", "OPD", "ICU", "RCW", "7W", "8W", "9W", "11W", "內科", "外科", "精神科", "復健科", "松1.2", "松3", "松5.6", "康", "日照", "其他(請註明)"] else 0,
+        departments,
+        index=departments.index(st.session_state.department) if st.session_state.department in departments else 0,
         key="department_select"
     )
     
@@ -310,25 +310,31 @@ if st.session_state.current_observations:
     st.subheader("📊 稽核統計")
     
     # 總稽核次數使用大卡片
-    col_main = st.columns(1)[0]
     st.metric("總稽核次數", total_count, help="本次稽核的總觀察次數")
     
-    st.markdown("##### 各受稽人員次數")
-    # 使用動態列數顯示各人員統計
+    # 各人員次數用小字體表格顯示
+    st.markdown("<p style='font-size: 14px; margin-top: 10px; margin-bottom: 5px;'><b>各受稽人員次數</b></p>", unsafe_allow_html=True)
+    
+    # 創建橫向顯示的統計資料
     staff_items = list(staff_counts.items())
-    cols_per_row = 3
-    for i in range(0, len(staff_items), cols_per_row):
-        cols = st.columns(cols_per_row)
-        for j, (staff, count) in enumerate(staff_items[i:i+cols_per_row]):
-            with cols[j]:
-                st.metric(staff, f"{count}次")
+    staff_summary = " | ".join([f"{staff}: {count}次" for staff, count in staff_items])
+    st.markdown(f"<p style='font-size: 13px;'>{staff_summary}</p>", unsafe_allow_html=True)
     
     st.markdown("---")
     st.subheader("📝 本次稽核的觀察記錄")
+    
+    # 只顯示必要欄位
+    display_columns = ["稽核單位", "受稽核人員類別", "手部衛生時機", "手部衛生方式", "手部衛生正確性", "不正確原因"]
+    df_display = df_current[display_columns].copy()
+    
+    # 新增序號欄位
+    df_display.insert(0, "序", range(1, len(df_display) + 1))
+    
     st.dataframe(
-        df_current,
+        df_display,
         use_container_width=True,
-        height=min(400, 50 + len(df_current) * 35)
+        height=min(400, 50 + len(df_display) * 35),
+        hide_index=True
     )
 
 # 頁尾
