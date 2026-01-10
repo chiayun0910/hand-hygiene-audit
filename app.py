@@ -110,7 +110,8 @@ st.markdown("---")
 # 基本資料區塊
 st.header("📋 稽核基本資料")
 
-col1, col2 = st.columns(2)
+# 第一列：稽核月份、稽核單位、稽核人員
+col1, col2, col3 = st.columns(3)
 
 with col1:
     # 限制月份選擇：只能選擇當前月或之前的月份
@@ -130,14 +131,6 @@ with col1:
         help="只能選擇當前月份或之前的月份"
     )
     st.session_state.audit_month = audit_month
-    
-    auditor = st.text_input(
-        "👨‍⚕️ 稽核人員姓名",
-        value=st.session_state.auditor,
-        placeholder="請輸入姓名",
-        key="auditor_input"
-    )
-    st.session_state.auditor = auditor
 
 with col2:
     departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W", 
@@ -155,7 +148,20 @@ with col2:
         department = st.text_input("請註明單位", key="department_other")
     
     st.session_state.department = department
-    
+
+with col3:
+    auditor = st.text_input(
+        "👨‍⚕️ 稽核人員姓名",
+        value=st.session_state.auditor,
+        placeholder="請輸入姓名",
+        key="auditor_input"
+    )
+    st.session_state.auditor = auditor
+
+# 第二列：受稽核人員類別、受稽核人員單位
+col1, col2 = st.columns(2)
+
+with col1:
     staff_category = st.selectbox(
         "👥 受稽核人員類別",
         ["護理師", "照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
@@ -173,6 +179,39 @@ with col2:
         staff_category = st.text_input("請註明人員類別", key="staff_category_other")
     
     st.session_state.staff_category = staff_category
+
+with col2:
+    # 初始化 staff_unit_type
+    if 'staff_unit_type' not in st.session_state:
+        st.session_state.staff_unit_type = "同隸屬稽核單位/病房"
+    
+    staff_unit_type = st.radio(
+        "🏫 受稽核人員單位",
+        ["同隸屬稽核單位/病房", "另選隸屬單位"],
+        key="staff_unit_type_select",
+        horizontal=True
+    )
+    st.session_state.staff_unit_type = staff_unit_type
+    
+    # 如果選擇「另選隸屬單位」，顯示單位選擇
+    if staff_unit_type == "另選隸屬單位":
+        if 'staff_unit' not in st.session_state:
+            st.session_state.staff_unit = "ER"
+        
+        staff_unit = st.selectbox(
+            "選擇單位",
+            departments,
+            index=departments.index(st.session_state.staff_unit) if st.session_state.staff_unit in departments else 0,
+            key="staff_unit_select",
+            label_visibility="collapsed"
+        )
+        
+        if staff_unit == "其他(請註明)":
+            staff_unit = st.text_input("請註明單位", key="staff_unit_other")
+        
+        st.session_state.staff_unit = staff_unit
+    else:
+        st.session_state.staff_unit = st.session_state.department
 
 st.markdown("---")
 
@@ -268,9 +307,10 @@ with col1:
                 "稽核日期": datetime.now().strftime("%Y-%m-%d"),
                 "稽核時間": datetime.now().strftime("%H:%M:%S"),
                 "稽核月份": st.session_state.audit_month,
-                "稽核單位": st.session_state.department,
+                "稽核者單位": st.session_state.department,
                 "稽核人員": st.session_state.auditor,
                 "受稽核人員類別": st.session_state.staff_category,
+                "受稽核者單位": st.session_state.staff_unit,
                 "手部衛生時機": hand_hygiene_moment,
                 "手部衛生方式": hygiene_method,
                 "手部衛生正確性": technique_correct if hygiene_method != "沒有洗手" else "未評估(沒有洗手)",
@@ -324,7 +364,7 @@ if st.session_state.current_observations:
     st.subheader("📝 本次稽核的觀察記錄")
     
     # 只顯示必要欄位
-    display_columns = ["稽核單位", "受稽核人員類別", "手部衛生時機", "手部衛生方式", "手部衛生正確性", "不正確原因"]
+    display_columns = ["稽核者單位", "受稽核人員類別", "受稽核者單位", "手部衛生時機", "手部衛生方式", "手部衛生正確性", "不正確原因"]
     df_display = df_current[display_columns].copy()
     
     # 新增序號欄位
