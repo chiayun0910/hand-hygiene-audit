@@ -191,6 +191,10 @@ with col_obs2:
         label_visibility="collapsed"
     )
 
+# 初始化變數
+technique_correct = None
+incorrect_reason = None
+
 if hygiene_method != "沒有洗手":
     st.markdown("---")
     st.markdown("#### 3️⃣ 正確性評估")
@@ -206,9 +210,15 @@ if hygiene_method != "沒有洗手":
     
     with col_correct2:
         if technique_correct == "不正確":
+            # 根據乾洗手或濕洗手顯示不同的不正確原因
+            if hygiene_method == "乾洗手（酒精性乾洗手液）":
+                incorrect_options = ["步驟不完整", "戴手套洗手", "未搓到手部全乾", "其他(請註明)"]
+            else:  # 濕洗手
+                incorrect_options = ["步驟不完整", "戴手套洗手", "洗手後未擦乾", "其他(請註明)"]
+            
             incorrect_reason = st.radio(
                 "不正確原因",
-                ["步驟不完整", "戴手套洗手", "濕洗手後未擦乾", "其他(請註明)"],
+                incorrect_options,
                 key="incorrect_reason"
             )
             
@@ -231,7 +241,7 @@ with col1:
         # 驗證必填欄位
         if not auditor:
             st.error("請填寫稽核人員姓名！")
-        elif hygiene_method != "沒有洗手" and technique_correct is None:
+        elif hygiene_method != "沒有洗手" and not technique_correct:
             st.error("請評估執行正確性！")
         elif technique_correct == "不正確" and not incorrect_reason:
             st.error("請選擇不正確原因！")
@@ -246,7 +256,7 @@ with col1:
                 "受稽核人員類別": st.session_state.staff_category,
                 "手部衛生時機": hand_hygiene_moment,
                 "執行方式": hygiene_method,
-                "正確性": technique_correct if technique_correct else "未評估(沒有洗手)",
+                "正確性": technique_correct if hygiene_method != "沒有洗手" else "未評估(沒有洗手)",
                 "不正確原因": incorrect_reason if incorrect_reason else "無",
                 "備註": notes if notes else "無",
                 "遵從率": "是" if hygiene_method != "沒有洗手" else "否"
