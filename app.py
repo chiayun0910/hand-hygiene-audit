@@ -2,13 +2,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import gspread
-from google.oauth2.service_account import Credentials
 
 # Google Sheets 設定
-SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
 SPREADSHEET_NAME = "hand-hygiene-new"
 
 # 初始化 Google Sheets 連接
@@ -16,14 +11,16 @@ SPREADSHEET_NAME = "hand-hygiene-new"
 def init_google_sheets():
     """初始化 Google Sheets 連接"""
     try:
-        credentials_dict = dict(st.secrets["gcp_service_account"])
-        credentials = Credentials.from_service_account_info(
-            credentials_dict,
-            scopes=SCOPES
-        )
-        gc = gspread.authorize(credentials)
-        spreadsheet = gc.open(SPREADSHEET_NAME)
-        return spreadsheet
+        # 嘗試使用本地 key.json（本地開發環境）
+        import os
+        if os.path.exists('key.json'):
+            gc = gspread.service_account(filename='key.json')
+        else:
+            # 使用 Streamlit secrets（雲端環境）
+            gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
+        
+        sh = gc.open(SPREADSHEET_NAME)
+        return sh
     except Exception as e:
         st.error(f"無法連接到 Google Sheets: {str(e)}")
         return None
