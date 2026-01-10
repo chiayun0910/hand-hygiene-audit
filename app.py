@@ -45,17 +45,23 @@ def check_login():
         return False
     return True
 
-def save_to_google_sheets(record):
+def save_to_google_sheets(record, audit_month):
     """將記錄保存到 Google Sheets"""
     try:
         spreadsheet = init_google_sheets()
         if spreadsheet is None:
             return False
         
+        # 根據稽核月份生成工作表名稱，例如：2026年1月
+        from datetime import datetime
+        current_year = datetime.now().year
+        sheet_name = f"{current_year}年{audit_month}"
+        
         try:
-            worksheet = spreadsheet.worksheet("稽核數據")
+            worksheet = spreadsheet.worksheet(sheet_name)
         except:
-            worksheet = spreadsheet.add_worksheet(title="稽核數據", rows=1000, cols=20)
+            # 工作表不存在，創建新的
+            worksheet = spreadsheet.add_worksheet(title=sheet_name, rows=1000, cols=20)
             headers = list(record.keys())
             worksheet.append_row(headers)
         
@@ -107,11 +113,21 @@ st.header("📋 稽核基本資料")
 col1, col2 = st.columns(2)
 
 with col1:
+    # 限制月份選擇：只能選擇當前月或之前的月份
+    current_month = datetime.now().month
+    all_months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
+    available_months = all_months[:current_month]  # 只顯示到當前月
+    
+    default_index = 0
+    if st.session_state.audit_month and st.session_state.audit_month in available_months:
+        default_index = available_months.index(st.session_state.audit_month)
+    
     audit_month = st.selectbox(
         "📅 稽核列計月份",
-        ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
-        index=["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"].index(st.session_state.audit_month) if st.session_state.audit_month else 0,
-        key="audit_month_select"
+        available_months,
+        index=default_index,
+        key="audit_month_select",
+        help="只能選擇當前月份或之前的月份"
     )
     st.session_state.audit_month = audit_month
     
@@ -248,23 +264,22 @@ with col1:
         else:
             # 創建觀察記錄
             observation = {
-                "稽核月份": st.session_state.audit_month,
+                "登入者Email": st.session_state.user_email,
                 "稽核日期": datetime.now().strftime("%Y-%m-%d"),
                 "稽核時間": datetime.now().strftime("%H:%M:%S"),
-                "稽核人員": st.session_state.auditor,
+                "稽核月份": st.session_state.audit_month,
                 "稽核單位": st.session_state.department,
+                "稽核人員": st.session_state.auditor,
                 "受稽核人員類別": st.session_state.staff_category,
                 "手部衛生時機": hand_hygiene_moment,
-                "執行方式": hygiene_method,
-                "正確性": technique_correct if hygiene_method != "沒有洗手" else "未評估(沒有洗手)",
-                "不正確原因": incorrect_reason if incorrect_reason else "無",
-                "備註": notes if notes else "無",
-                "遵從率": "是" if hygiene_method != "沒有洗手" else "否"
+                "手部衛生方式": hygiene_method,
+                "手部衛生正確性": technique_correct if hygiene_method != "沒有洗手" else "未評估(沒有洗手)",
+                "不正確原因": incorrect_reason if incorrect_reason else "無"
             }
             
             # 保存到 Google Sheets
             with st.spinner("正在保存到雲端..."):
-                if save_to_google_sheets(observation):
+                if save_to_google_sheets(observation, st.session_state.audit_month):
                     st.session_state.current_observations.append(observation)
                     st.success("✅ 觀察記錄已成功保存！")
                     st.balloons()
