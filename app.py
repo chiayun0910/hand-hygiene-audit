@@ -1,0 +1,314 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
+
+# Google Sheets 設定
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive'
+]
+SPREADSHEET_NAME = "hand-hygiene-new"
+
+# 初始化 Google Sheets 連接
+@st.cache_resource
+def init_google_sheets():
+    """初始化 Google Sheets 連接"""
+    try:
+        credentials_dict = dict(st.secrets["gcp_service_account"])
+        credentials = Credentials.from_service_account_info(
+            credentials_dict,
+            scopes=SCOPES
+        )
+        gc = gspread.authorize(credentials)
+        spreadsheet = gc.open(SPREADSHEET_NAME)
+        return spreadsheet
+    except Exception as e:
+        st.error(f"無法連接到 Google Sheets: {str(e)}")
+        return None
+
+def check_login():
+    """檢查使用者登入狀態"""
+    if 'user_email' not in st.session_state:
+        st.session_state.user_email = None
+    
+    if st.session_state.user_email is None:
+        st.title("🔐 手部衛生稽核系統 - 登入")
+        st.markdown("### 請使用 Gmail 帳號登入")
+        
+        email = st.text_input("Gmail 帳號", placeholder="example@gmail.com")
+        
+        if st.button("登入", type="primary"):
+            if email and "@" in email:
+                st.session_state.user_email = email
+                st.rerun()
+            else:
+                st.error("請輸入有效的 Email 地址")
+        return False
+    return True
+
+def save_to_google_sheets(record):
+    """將記錄保存到 Google Sheets"""
+    try:
+        spreadsheet = init_google_sheets()
+        if spreadsheet is None:
+            return False
+        
+        try:
+            worksheet = spreadsheet.worksheet("稽核數據")
+        except:
+            worksheet = spreadsheet.add_worksheet(title="稽核數據", rows=1000, cols=20)
+            headers = list(record.keys())
+            worksheet.append_row(headers)
+        
+        values = list(record.values())
+        worksheet.append_row(values)
+        return True
+    except Exception as e:
+        st.error(f"保存失敗: {str(e)}")
+        return False
+
+# 設置頁面
+st.set_page_config(
+    page_title="手部衛生稽核系統",
+    page_icon="🧼",
+    layout="centered"
+)
+
+# 檢查登入
+if not check_login():
+    st.stop()
+
+# 初始化 session state
+if 'audit_month' not in st.session_state:
+    st.session_state.audit_month = ""
+if 'auditor' not in st.session_state:
+    st.session_state.auditor = ""
+if 'department' not in st.session_state:
+    st.session_state.department = "ER"
+if 'staff_category' not in st.session_state:
+    st.session_state.staff_category = "護理師"
+if 'current_observations' not in st.session_state:
+    st.session_state.current_observations = []
+
+# 標題
+col_title, col_user = st.columns([3, 1])
+with col_title:
+    st.title("🧼 手部衛生稽核表")
+with col_user:
+    st.caption(f"👤 {st.session_state.user_email}")
+    if st.button("登出", key="logout"):
+        st.session_state.user_email = None
+        st.rerun()
+
+st.markdown("---")
+
+# 基本資料區塊
+st.header("📋 稽核基本資料")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    audit_month = st.selectbox(
+        "📅 稽核列計月份",
+        ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+        index=["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"].index(st.session_state.audit_month) if st.session_state.audit_month else 0,
+        key="audit_month_select"
+    )
+    st.session_state.audit_month = audit_month
+    
+    auditor = st.text_input(
+        "👨‍⚕️ 稽核人員姓名",
+        value=st.session_state.auditor,
+        placeholder="請輸入姓名",
+        key="auditor_input"
+    )
+    st.session_state.auditor = auditor
+
+with col2:
+    department = st.selectbox(
+        "🏥 隸屬稽核單位/病房",
+        ["ER", "HDR", "OPD", "ICU", "RCW", "7W", "8W", "9W", "11W", 
+         "內科", "外科", "精神科", "復健科", "松1.2", "松3", "松5.6", 
+         "康", "日照", "其他(請註明)"],
+        index=["ER", "HDR", "OPD", "ICU", "RCW", "7W", "8W", "9W", "11W", 
+               "內科", "外科", "精神科", "復健科", "松1.2", "松3", "松5.6", 
+               "康", "日照", "其他(請註明)"].index(st.session_state.department) if st.session_state.department in ["ER", "HDR", "OPD", "ICU", "RCW", "7W", "8W", "9W", "11W", "內科", "外科", "精神科", "復健科", "松1.2", "松3", "松5.6", "康", "日照", "其他(請註明)"] else 0,
+        key="department_select"
+    )
+    
+    if department == "其他(請註明)":
+        department = st.text_input("請註明單位", key="department_other")
+    
+    st.session_state.department = department
+    
+    staff_category = st.selectbox(
+        "👥 受稽核人員類別",
+        ["護理師", "照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
+         "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
+         "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
+         "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"],
+        index=["護理師", "照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
+               "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
+               "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
+               "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"].index(st.session_state.staff_category) if st.session_state.staff_category in ["護理師", "照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師", "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師", "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師", "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"] else 0,
+        key="staff_category_select"
+    )
+    
+    if staff_category == "其他(請註明)":
+        staff_category = st.text_input("請註明人員類別", key="staff_category_other")
+    
+    st.session_state.staff_category = staff_category
+
+st.markdown("---")
+
+# 手部衛生觀察區塊
+st.header("🔍 手部衛生行為觀察")
+
+col_obs1, col_obs2 = st.columns(2)
+
+with col_obs1:
+    # 1. 選擇觀察時機
+    st.markdown("#### 1️⃣ 手部衛生時機")
+    hand_hygiene_moment = st.radio(
+        "請選擇觀察時機",
+        [
+            "時機1: 接觸病人前",
+            "時機2: 執行清潔/無菌操作技術前",
+            "時機3: 暴露病人體液風險後",
+            "時機4: 接觸病人後",
+            "時機5: 接觸病人周遭環境後"
+        ],
+        key="hand_hygiene_moment",
+        label_visibility="collapsed"
+    )
+
+with col_obs2:
+    # 2. 選擇手部衛生執行方式
+    st.markdown("#### 2️⃣ 執行方式")
+    hygiene_method = st.radio(
+        "請選擇執行方式",
+        ["乾洗手（酒精性乾洗手液）", "濕洗手（肥皂和水）", "沒有洗手"],
+        key="hygiene_method",
+        label_visibility="collapsed"
+    )
+
+if hygiene_method != "沒有洗手":
+    st.markdown("---")
+    st.markdown("#### 3️⃣ 正確性評估")
+    
+    col_correct1, col_correct2 = st.columns([1, 2])
+    
+    with col_correct1:
+        technique_correct = st.radio(
+            "執行正確性",
+            ["正確(七步驟完全正確)", "不正確"],
+            key="technique_correct"
+        )
+    
+    with col_correct2:
+        if technique_correct == "不正確":
+            incorrect_reason = st.radio(
+                "不正確原因",
+                ["步驟不完整", "戴手套洗手", "濕洗手後未擦乾", "其他(請註明)"],
+                key="incorrect_reason"
+            )
+            
+            if incorrect_reason == "其他(請註明)":
+                incorrect_reason = st.text_input("請註明原因", key="incorrect_reason_other")
+        else:
+            incorrect_reason = None
+
+# 備註
+st.markdown("---")
+notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
+
+# 提交和結束按鈕
+st.markdown("---")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("✅ 提交此次觀察", type="primary", use_container_width=True):
+        # 驗證必填欄位
+        if not auditor:
+            st.error("請填寫稽核人員姓名！")
+        elif hygiene_method != "沒有洗手" and technique_correct is None:
+            st.error("請評估執行正確性！")
+        elif technique_correct == "不正確" and not incorrect_reason:
+            st.error("請選擇不正確原因！")
+        else:
+            # 創建觀察記錄
+            observation = {
+                "稽核月份": st.session_state.audit_month,
+                "稽核日期": datetime.now().strftime("%Y-%m-%d"),
+                "稽核時間": datetime.now().strftime("%H:%M:%S"),
+                "稽核人員": st.session_state.auditor,
+                "稽核單位": st.session_state.department,
+                "受稽核人員類別": st.session_state.staff_category,
+                "手部衛生時機": hand_hygiene_moment,
+                "執行方式": hygiene_method,
+                "正確性": technique_correct if technique_correct else "未評估(沒有洗手)",
+                "不正確原因": incorrect_reason if incorrect_reason else "無",
+                "備註": notes if notes else "無",
+                "遵從率": "是" if hygiene_method != "沒有洗手" else "否"
+            }
+            
+            # 保存到 Google Sheets
+            with st.spinner("正在保存到雲端..."):
+                if save_to_google_sheets(observation):
+                    st.session_state.current_observations.append(observation)
+                    st.success("✅ 觀察記錄已成功保存！")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error("⚠️ 保存失敗，請檢查網路連接")
+
+with col2:
+    if st.button("🏁 結束觀察", type="secondary", use_container_width=True):
+        # 重置所有狀態
+        st.session_state.audit_month = ""
+        st.session_state.auditor = ""
+        st.session_state.department = "ER"
+        st.session_state.staff_category = "護理師"
+        st.session_state.current_observations = []
+        st.success("稽核已結束，可以開始新的稽核。")
+        st.rerun()
+
+# 顯示當前會話的觀察記錄
+if st.session_state.current_observations:
+    st.markdown("---")
+    
+    # 統計資訊
+    df_current = pd.DataFrame(st.session_state.current_observations)
+    total_count = len(df_current)
+    staff_counts = df_current['受稽核人員類別'].value_counts().to_dict()
+    
+    st.subheader("📊 稽核統計")
+    
+    # 總稽核次數使用大卡片
+    col_main = st.columns(1)[0]
+    st.metric("總稽核次數", total_count, help="本次稽核的總觀察次數")
+    
+    st.markdown("##### 各受稽人員次數")
+    # 使用動態列數顯示各人員統計
+    staff_items = list(staff_counts.items())
+    cols_per_row = 3
+    for i in range(0, len(staff_items), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for j, (staff, count) in enumerate(staff_items[i:i+cols_per_row]):
+            with cols[j]:
+                st.metric(staff, f"{count}次")
+    
+    st.markdown("---")
+    st.subheader("📝 本次稽核的觀察記錄")
+    st.dataframe(
+        df_current,
+        use_container_width=True,
+        height=min(400, 50 + len(df_current) * 35)
+    )
+
+# 頁尾
+st.markdown("---")
+st.caption("手部衛生稽核系統 v3.0 | 數據同步至 Google 雲端")
