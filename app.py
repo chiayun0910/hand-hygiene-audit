@@ -268,22 +268,25 @@ if hygiene_method != "沒有洗手":
             # 根據乾洗手或濕洗手顯示不同的不正確原因（支援複選）
             if hygiene_method == "乾洗手（酒精性乾洗手液）":
                 incorrect_options = ["步驟不完整", "戴手套洗手", "未搓到手部全乾", 
-                                    "搓揉時間過短(少於20-30秒)", "乾洗手液量不足已覆蓋全手", "其他(請註明)"]
+                                    "搓揉時間過短(少於20-30秒)", "乾洗手液量不足已覆蓋全手"]
             else:  # 濕洗手
                 incorrect_options = ["步驟不完整", "戴手套洗手", "只用清水洗手", 
-                                    "洗手後未擦乾", "洗手時間過短(少於40-60秒)", "其他(請註明)"]
+                                    "洗手後未擦乾", "洗手時間過短(少於40-60秒)"]
             
-            selected_reasons = st.multiselect(
-                "不正確原因（可複選）",
-                incorrect_options,
-                key="incorrect_reason"
-            )
+            st.write("**不正確原因（可複選）**")
+            selected_reasons = []
             
-            # 如果選擇「其他」，顯示輸入框
-            if "其他(請註明)" in selected_reasons:
+            # 使用 checkbox 顯示所有選項
+            for option in incorrect_options:
+                if st.checkbox(option, key=f"incorrect_{option}"):
+                    selected_reasons.append(option)
+            
+            # 「其他」選項
+            other_checked = st.checkbox("其他(請註明)", key="incorrect_other_checkbox")
+            if other_checked:
                 other_reason = st.text_input("請註明原因", key="incorrect_reason_other")
-                # 替換「其他」為實際輸入的內容
-                selected_reasons = [r if r != "其他(請註明)" else other_reason for r in selected_reasons]
+                if other_reason:
+                    selected_reasons.append(other_reason)
             
             # 將複選結果合併為字串
             incorrect_reason = ", ".join(selected_reasons) if selected_reasons else None
