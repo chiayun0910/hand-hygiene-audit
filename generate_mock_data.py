@@ -85,9 +85,19 @@ def generate_month_data(year, month, target_compliance_rate, target_correctness_
                 correctness = "不正確"
                 
                 if hygiene_method == "乾洗手（酒精性乾洗手液）":
-                    incorrect_reason = random.choice(["步驟不完整", "戴手套洗手", "未搓到手部全乾"])
+                    # 乾洗手不正確原因（可複選，隨機生成1-2個原因）
+                    dry_reasons = ["步驟不完整", "戴手套洗手", "未搓到手部全乾", 
+                                  "搓揉時間過短(少於20-30秒)", "乾洗手液量不足已覆蓋全手"]
+                    num_reasons = random.choices([1, 2], weights=[0.7, 0.3])[0]
+                    selected_reasons = random.sample(dry_reasons, num_reasons)
+                    incorrect_reason = ", ".join(selected_reasons)
                 else:
-                    incorrect_reason = random.choice(["步驟不完整", "戴手套洗手", "洗手後未擦乾"])
+                    # 濕洗手不正確原因（可複選，隨機生成1-2個原因）
+                    wet_reasons = ["步驟不完整", "戴手套洗手", "只用清水洗手", 
+                                  "洗手後未擦乾", "洗手時間過短(少於40-60秒)"]
+                    num_reasons = random.choices([1, 2], weights=[0.7, 0.3])[0]
+                    selected_reasons = random.sample(wet_reasons, num_reasons)
+                    incorrect_reason = ", ".join(selected_reasons)
             else:
                 # 洗手且正確
                 hygiene_method = random.choice(["乾洗手（酒精性乾洗手液）", "濕洗手（肥皂和水）"])
