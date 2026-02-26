@@ -84,6 +84,8 @@ if not check_login():
     st.stop()
 
 # 初始化 session state
+if 'audit_month' not in st.session_state:
+    st.session_state.audit_month = ""
 if 'auditor' not in st.session_state:
     st.session_state.auditor = ""
 if 'department' not in st.session_state:
@@ -333,7 +335,7 @@ with col1:
                 "登入者Email": st.session_state.user_email,
                 "稽核日期": datetime.now().strftime("%Y-%m-%d"),
                 "稽核時間": datetime.now().strftime("%H:%M:%S"),
-                "稽核月份": st.session_state.audit_month,
+                "稽核月份": audit_month,
                 "稽核者單位": st.session_state.department,
                 "稽核人員": st.session_state.auditor,
                 "受稽核人員類別": st.session_state.staff_category,
@@ -346,7 +348,7 @@ with col1:
             
             # 保存到 Google Sheets
             with st.spinner("正在保存到雲端..."):
-                if save_to_google_sheets(observation, st.session_state.audit_month):
+                if save_to_google_sheets(observation, audit_month):
                     st.session_state.current_observations.append(observation)
                     st.success("✅ 觀察記錄已成功保存！")
                     st.balloons()
