@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import gspread
 
 # Google Sheets 設定
@@ -331,10 +331,13 @@ with col1:
             st.error("請選擇不正確原因！")
         else:
             # 創建觀察記錄
+            # 使用台灣時區（UTC+8）
+            taiwan_tz = timezone(timedelta(hours=8))
+            now_taiwan = datetime.now(taiwan_tz)
             observation = {
                 "登入者Email": st.session_state.user_email,
-                "稽核日期": datetime.now().strftime("%Y-%m-%d"),
-                "稽核時間": datetime.now().strftime("%H:%M:%S"),
+                "稽核日期": now_taiwan.strftime("%Y-%m-%d"),
+                "稽核時間": now_taiwan.strftime("%H:%M:%S"),
                 "稽核月份": audit_month,
                 "稽核者單位": st.session_state.department,
                 "稽核人員": st.session_state.auditor,
