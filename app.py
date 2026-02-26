@@ -84,8 +84,6 @@ if not check_login():
     st.stop()
 
 # 初始化 session state
-if 'audit_month' not in st.session_state:
-    st.session_state.audit_month = ""
 if 'auditor' not in st.session_state:
     st.session_state.auditor = ""
 if 'department' not in st.session_state:
@@ -114,23 +112,41 @@ st.header("📋 稽核基本資料")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # 限制月份選擇：只能選擇當前月或之前的月份
-    current_month = datetime.now().month
+    # 限制月份選擇：每月5日後只能選擇當月，5日前可選擇當月或前一個月
+    current_date = datetime.now()
+    current_month = current_date.month
+    current_day = current_date.day
     all_months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
-    available_months = all_months[:current_month]  # 只顯示到當前月
     
-    default_index = 0
-    if st.session_state.audit_month and st.session_state.audit_month in available_months:
-        default_index = available_months.index(st.session_state.audit_month)
+    # 根據日期決定可選擇的月份
+    if current_day <= 5:
+        # 5日前（含5日），可選擇當月或前一個月
+        if current_month == 1:
+            # 1月時，前一個月是去年12月，但只顯示1月
+            available_months = [all_months[0]]
+        else:
+            # 其他月份，可選擇前一個月和當月（前一個月在前）
+            available_months = [all_months[current_month - 2], all_months[current_month - 1]]
+    else:
+        # 5日後，只能選擇當月
+        available_months = [all_months[current_month - 1]]
+    
+    # 預設選擇當月（當月一定在可選範圍內）
+    current_month_str = all_months[current_month - 1]
+    default_index = available_months.index(current_month_str)
+    
+    help_text = f"目前是{current_month}月{current_day}日，"
+    if current_day <= 5:
+        help_text += "可選擇當月或前一個月"
+    else:
+        help_text += "只能選擇當月"
     
     audit_month = st.selectbox(
         "📅 稽核列計月份",
         available_months,
         index=default_index,
-        key="audit_month_select",
-        help="只能選擇當前月份或之前的月份"
+        help=help_text
     )
-    st.session_state.audit_month = audit_month
 
 with col2:
     departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W", 
