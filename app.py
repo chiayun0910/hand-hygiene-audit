@@ -551,8 +551,19 @@ if report_records:
         return int(digits) if digits else 99
 
     if month_column in df_current.columns:
-        month_groups = df_current.groupby(month_column, dropna=False)
-        sorted_months = sorted(month_groups.groups.keys(), key=month_sort_key)
+        normalized_month_column = "稽核列計月份_顯示"
+        df_current[normalized_month_column] = (
+            df_current[month_column]
+            .fillna("未填")
+            .astype(str)
+            .replace({"": "未填", "None": "未填", "nan": "未填"})
+        )
+
+        month_groups = df_current.groupby(normalized_month_column, dropna=False)
+        sorted_months = sorted(
+            month_groups.groups.keys(),
+            key=lambda month_text: month_sort_key(month_text) if month_text != "未填" else 999,
+        )
 
         for month_name in sorted_months:
             month_df = month_groups.get_group(month_name).copy()
@@ -564,40 +575,40 @@ if report_records:
             st.markdown(f"- **{month_name}稽核次數：** 總稽核次數{month_total}次")
             st.markdown(f"- **{month_name}各受稽人員次數：** {month_staff_summary if month_staff_summary else '無資料'}")
 
-            display_columns = [
-                month_column,
-                "稽核日期",
-                "稽核時間",
-                "稽核者單位",
-                "稽核人員",
-                "受稽核人員類別",
-                "受稽核者單位",
-                "手部衛生時機",
-                "手部衛生方式",
-                "手部衛生正確性",
-                "不正確原因",
-            ]
-            display_columns = [column for column in display_columns if column in month_df.columns]
-            month_display = month_df[display_columns].copy()
-            month_display.rename(
-                columns={
-                    month_column: "稽核列計月份",
-                    "稽核時間": "時間",
-                    "稽核人員": "稽核者人員",
-                },
-                inplace=True,
-            )
-            month_display.insert(0, "序", range(1, len(month_display) + 1))
+        st.markdown("---")
+        st.markdown("### 明細列表")
 
-            st.dataframe(
-                month_display,
-                use_container_width=True,
-                height=min(420, 50 + len(month_display) * 35),
-                hide_index=True,
-            )
+        display_columns = [
+            normalized_month_column,
+            "稽核日期",
+            "稽核時間",
+            "稽核者單位",
+            "稽核人員",
+            "受稽核人員類別",
+            "受稽核者單位",
+            "手部衛生時機",
+            "手部衛生方式",
+            "手部衛生正確性",
+            "不正確原因",
+        ]
+        display_columns = [column for column in display_columns if column in df_current.columns]
+        report_display = df_current[display_columns].copy()
+        report_display.rename(
+            columns={
+                normalized_month_column: "稽核列計月份",
+                "稽核時間": "時間",
+                "稽核人員": "稽核者人員",
+            },
+            inplace=True,
+        )
+        report_display.insert(0, "序", range(1, len(report_display) + 1))
 
-            if month_name != sorted_months[-1]:
-                st.markdown("---")
+        st.dataframe(
+            report_display,
+            use_container_width=True,
+            height=min(520, 50 + len(report_display) * 35),
+            hide_index=True,
+        )
     else:
         st.info("目前資料缺少稽核列計月份欄位，無法依月份統計。")
 
