@@ -72,6 +72,125 @@ def save_to_google_sheets(record, audit_month):
         st.error(f"保存失敗: {str(e)}")
         return False
 
+def load_latest_monthly_record(audit_month, user_email):
+    """載入指定月份、指定登入者的最新一筆紀錄"""
+    try:
+        spreadsheet = init_google_sheets()
+        if spreadsheet is None:
+            return None
+
+        current_year = datetime.now().year
+        sheet_name = f"{current_year}年{audit_month}"
+
+        try:
+            worksheet = spreadsheet.worksheet(sheet_name)
+        except Exception:
+            return None
+
+        records = worksheet.get_all_records()
+        if not records:
+            return None
+
+        normalized_email = str(user_email).strip().lower()
+        matched_records = [
+            record for record in records
+            if str(record.get("登入者Email", "")).strip().lower() == normalized_email
+        ]
+
+        if not matched_records:
+            return None
+
+        def sort_key(record):
+            date_text = str(record.get("稽核日期", ""))
+            time_text = str(record.get("稽核時間", "00:00:00"))
+            try:
+                return datetime.strptime(f"{date_text} {time_text}", "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return datetime.min
+
+        return sorted(matched_records, key=sort_key)[-1]
+    except Exception as e:
+        st.warning(f"載入歷史紀錄失敗: {str(e)}")
+        return None
+
+
+def apply_record_defaults(record):
+    """將歷史紀錄回填到表單預設值"""
+    if not record:
+        return
+
+    department = record.get("稽核者單位")
+    auditor = record.get("稽核人員")
+    staff_category = record.get("受稽核人員類別")
+    staff_unit = record.get("受稽核者單位")
+
+    departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W",
+                   "內科", "外科", "精神科", "復健科", "放射科", "檢驗科", "感管中心",
+                   "松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照", "其他(請註明)"]
+
+    staff_categories = ["護理師", "照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
+                       "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
+                       "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
+                       "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"]
+
+    if department:
+        if department in departments:
+            st.session_state.department = department
+        else:
+            st.session_state.department = "其他(請註明)"
+            st.session_state.department_other = department
+    if auditor:
+        st.session_state.auditor = auditor
+    if staff_category:
+        if staff_category in staff_categories:
+            st.session_state.staff_category = staff_category
+        else:
+            st.session_state.staff_category = "其他(請註明)"
+            st.session_state.staff_category_other = staff_category
+
+    if staff_unit:
+        if department and staff_unit == department:
+            st.session_state.staff_unit_type = "同隸屬稽核單位/病房"
+        else:
+            st.session_state.staff_unit_type = "另選隸屬單位"
+            if staff_unit in departments:
+                st.session_state.staff_unit = staff_unit
+            else:
+                st.session_state.staff_unit = "其他(請註明)"
+                st.session_state.staff_unit_other = staff_unit
+
+    if record.get("手部衛生時機"):
+        st.session_state.hand_hygiene_moment = record["手部衛生時機"]
+    if record.get("手部衛生方式"):
+        st.session_state.hygiene_method = record["手部衛生方式"]
+    if record.get("手部衛生正確性") in ["正確(七步驟完全正確)", "不正確"]:
+        st.session_state.technique_correct = record["手部衛生正確性"]
+    if record.get("備註"):
+        st.session_state.notes = record["備註"]
+
+
+def format_history_record(record):
+    """整理要顯示的歷史紀錄欄位"""
+    if not record:
+        return None
+
+    display_keys = [
+        "稽核日期",
+        "稽核時間",
+        "稽核者單位",
+        "稽核人員",
+        "受稽核人員類別",
+        "受稽核者單位",
+        "手部衛生時機",
+        "手部衛生方式",
+        "手部衛生正確性",
+        "不正確原因",
+    ]
+    if "備註" in record:
+        display_keys.append("備註")
+
+    return {key: record.get(key, "") for key in display_keys}
+
 # 設置頁面
 st.set_page_config(
     page_title="手部衛生稽核系統",
@@ -94,6 +213,10 @@ if 'staff_category' not in st.session_state:
     st.session_state.staff_category = "護理師"
 if 'current_observations' not in st.session_state:
     st.session_state.current_observations = []
+if 'latest_monthly_record' not in st.session_state:
+    st.session_state.latest_monthly_record = None
+if 'latest_monthly_record_key' not in st.session_state:
+    st.session_state.latest_monthly_record_key = None
 
 # 標題
 col_title, col_user = st.columns([3, 1])
@@ -149,6 +272,19 @@ with col1:
         index=default_index,
         help=help_text
     )
+
+record_context_key = f"{st.session_state.user_email}|{audit_month}"
+if st.session_state.latest_monthly_record_key != record_context_key:
+    st.session_state.latest_monthly_record = load_latest_monthly_record(audit_month, st.session_state.user_email)
+    st.session_state.latest_monthly_record_key = record_context_key
+    apply_record_defaults(st.session_state.latest_monthly_record)
+
+history_record = format_history_record(st.session_state.latest_monthly_record)
+if history_record:
+    with st.expander("📌 你上次本月填寫的紀錄", expanded=True):
+        st.dataframe(pd.DataFrame([history_record]), use_container_width=True, hide_index=True)
+else:
+    st.info("目前沒有找到你在這個月份的歷史紀錄。")
 
 with col2:
     departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W", 
@@ -352,6 +488,8 @@ with col1:
             # 保存到 Google Sheets
             with st.spinner("正在保存到雲端..."):
                 if save_to_google_sheets(observation, audit_month):
+                    st.session_state.latest_monthly_record = observation
+                    st.session_state.latest_monthly_record_key = f"{st.session_state.user_email}|{audit_month}"
                     st.session_state.current_observations.append(observation)
                     st.success("✅ 觀察記錄已成功保存！")
                     st.balloons()
