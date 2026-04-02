@@ -534,7 +534,7 @@ if st.session_state.current_observations:
     st.subheader("📝 本次稽核的觀察記錄")
     
     # 只顯示必要欄位
-    display_columns = ["稽核者單位", "受稽核人員類別", "受稽核者單位", "手部衛生時機", "手部衛生方式", "手部衛生正確性", "不正確原因"]
+    display_columns = ["稽核列計月份", "稽核者單位", "受稽核人員類別", "受稽核者單位", "手部衛生時機", "手部衛生方式", "手部衛生正確性", "不正確原因"]
     df_display = df_current[display_columns].copy()
     
     # 新增序號欄位
