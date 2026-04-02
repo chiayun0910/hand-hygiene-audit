@@ -79,10 +79,24 @@ def load_monthly_records(user_email, target_year, target_month):
         if spreadsheet is None:
             return []
 
+        def extract_month_from_sheet_title(sheet_title):
+            """從工作表名稱（例：2026年3月）解析稽核列計月份（例：3月）"""
+            title = str(sheet_title)
+            if "年" in title and "月" in title:
+                try:
+                    month_part = title.split("年", 1)[1].split("月", 1)[0].strip()
+                    month_num = int(month_part)
+                    return f"{month_num}月"
+                except Exception:
+                    return ""
+            return ""
+
         normalized_email = str(user_email).strip().lower()
         matched_records = []
 
         for worksheet in spreadsheet.worksheets():
+            sheet_month_fallback = extract_month_from_sheet_title(worksheet.title)
+
             try:
                 records = worksheet.get_all_records()
             except Exception:
@@ -101,7 +115,13 @@ def load_monthly_records(user_email, target_year, target_month):
                     continue
 
                 if record_datetime.year == target_year and record_datetime.month == target_month:
-                    matched_records.append(record)
+                    month_value = str(record.get("稽核列計月份", "")).strip()
+                    legacy_month_value = str(record.get("稽核月份", "")).strip()
+                    resolved_month = month_value or legacy_month_value or sheet_month_fallback
+
+                    normalized_record = dict(record)
+                    normalized_record["稽核列計月份"] = resolved_month
+                    matched_records.append(normalized_record)
 
         def sort_key(record):
             date_text = str(record.get("稽核日期", ""))
@@ -295,16 +315,16 @@ with col1:
     )
 
 record_context_key = f"{st.session_state.user_email}|{current_date.strftime('%Y-%m')}"
+monthly_records = load_monthly_records(
+    st.session_state.user_email,
+    current_date.year,
+    current_date.month,
+)
+st.session_state.latest_monthly_record = monthly_records[-1] if monthly_records else None
 if st.session_state.latest_monthly_record_key != record_context_key:
-    monthly_records = load_monthly_records(
-        st.session_state.user_email,
-        current_date.year,
-        current_date.month,
-    )
-    st.session_state.latest_monthly_record = monthly_records[-1] if monthly_records else None
-    st.session_state.latest_monthly_record_key = record_context_key
     apply_record_defaults(st.session_state.latest_monthly_record)
-    st.session_state.monthly_history_records = monthly_records
+st.session_state.latest_monthly_record_key = record_context_key
+st.session_state.monthly_history_records = monthly_records
 
 with col2:
     departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W", 
@@ -543,21 +563,29 @@ if report_records:
     st.subheader("📊 稽核統計報表")
 
     df_current = pd.DataFrame(report_records)
-    month_column = "稽核列計月份" if "稽核列計月份" in df_current.columns else "稽核月份"
 
     def month_sort_key(month_text):
         month_text = str(month_text).strip()
         digits = "".join(ch for ch in month_text if ch.isdigit())
         return int(digits) if digits else 99
 
-    if month_column in df_current.columns:
+    has_new_month_column = "稽核列計月份" in df_current.columns
+    has_legacy_month_column = "稽核月份" in df_current.columns
+
+    if has_new_month_column or has_legacy_month_column:
         normalized_month_column = "稽核列計月份_顯示"
-        df_current[normalized_month_column] = (
-            df_current[month_column]
-            .fillna("未填")
-            .astype(str)
-            .replace({"": "未填", "None": "未填", "nan": "未填"})
-        )
+
+        if has_new_month_column and has_legacy_month_column:
+            merged_month_series = df_current["稽核列計月份"].where(
+                df_current["稽核列計月份"].notna() & (df_current["稽核列計月份"].astype(str).str.strip() != ""),
+                df_current["稽核月份"],
+            )
+        elif has_new_month_column:
+            merged_month_series = df_current["稽核列計月份"]
+        else:
+            merged_month_series = df_current["稽核月份"]
+
+        df_current[normalized_month_column] = merged_month_series.fillna("未填").astype(str).replace({"": "未填", "None": "未填", "nan": "未填"})
 
         month_groups = df_current.groupby(normalized_month_column, dropna=False)
         sorted_months = sorted(
