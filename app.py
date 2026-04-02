@@ -80,15 +80,35 @@ def load_monthly_records(user_email, target_year, target_month):
             return []
 
         def extract_month_from_sheet_title(sheet_title):
-            """從工作表名稱（例：2026年3月）解析稽核列計月份（例：3月）"""
-            title = str(sheet_title)
+            """從工作表名稱（例：2026年3月、3月、2026/3）解析月份"""
+            import re
+            title = str(sheet_title).strip()
+            
+            # 提取所有數字
+            digits = re.findall(r'\d+', title)
+            
+            if not digits:
+                return ""
+            
+            # 方法1：如果有"年"和"月"，提取它們之間的數字
             if "年" in title and "月" in title:
                 try:
-                    month_part = title.split("年", 1)[1].split("月", 1)[0].strip()
-                    month_num = int(month_part)
-                    return f"{month_num}月"
+                    year_idx = title.find("年")
+                    month_idx = title.find("月", year_idx)
+                    month_str = title[year_idx+1:month_idx].strip()
+                    month_digits = ''.join(c for c in month_str if c.isdigit())
+                    if month_digits:
+                        month_num = int(month_digits)
+                        if 1 <= month_num <= 12:
+                            return f"{month_num}月"
                 except Exception:
-                    return ""
+                    pass
+            
+            # 方法2：查找1-12之間的數字，優先選最後出現的
+            potential_months = [int(d) for d in digits if int(d) >= 1 and int(d) <= 12]
+            if potential_months:
+                return f"{potential_months[-1]}月"
+            
             return ""
 
         normalized_email = str(user_email).strip().lower()
