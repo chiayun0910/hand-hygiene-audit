@@ -72,30 +72,36 @@ def save_to_google_sheets(record, audit_month):
         st.error(f"保存失敗: {str(e)}")
         return False
 
-def load_latest_monthly_record(audit_month, user_email):
-    """載入指定月份、指定登入者的最新一筆紀錄"""
+def load_latest_monthly_record(user_email, target_year, target_month):
+    """載入指定實際月份、指定登入者的最新一筆紀錄"""
     try:
         spreadsheet = init_google_sheets()
         if spreadsheet is None:
             return None
 
-        current_year = datetime.now().year
-        sheet_name = f"{current_year}年{audit_month}"
-
-        try:
-            worksheet = spreadsheet.worksheet(sheet_name)
-        except Exception:
-            return None
-
-        records = worksheet.get_all_records()
-        if not records:
-            return None
-
         normalized_email = str(user_email).strip().lower()
-        matched_records = [
-            record for record in records
-            if str(record.get("登入者Email", "")).strip().lower() == normalized_email
-        ]
+        matched_records = []
+
+        for worksheet in spreadsheet.worksheets():
+            try:
+                records = worksheet.get_all_records()
+            except Exception:
+                continue
+
+            for record in records:
+                if str(record.get("登入者Email", "")).strip().lower() != normalized_email:
+                    continue
+
+                date_text = str(record.get("稽核日期", ""))
+                time_text = str(record.get("稽核時間", "00:00:00"))
+
+                try:
+                    record_datetime = datetime.strptime(f"{date_text} {time_text}", "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    continue
+
+                if record_datetime.year == target_year and record_datetime.month == target_month:
+                    matched_records.append(record)
 
         if not matched_records:
             return None
@@ -174,7 +180,10 @@ def format_history_record(record):
     if not record:
         return None
 
+    audit_month_value = record.get("稽核列計月份", record.get("稽核月份", ""))
+
     display_keys = [
+        "稽核列計月份",
         "稽核日期",
         "稽核時間",
         "稽核者單位",
@@ -189,7 +198,9 @@ def format_history_record(record):
     if "備註" in record:
         display_keys.append("備註")
 
-    return {key: record.get(key, "") for key in display_keys}
+    history_record = {key: record.get(key, "") for key in display_keys}
+    history_record["稽核列計月份"] = audit_month_value
+    return history_record
 
 # 設置頁面
 st.set_page_config(
@@ -273,9 +284,13 @@ with col1:
         help=help_text
     )
 
-record_context_key = f"{st.session_state.user_email}|{audit_month}"
+record_context_key = f"{st.session_state.user_email}|{current_date.strftime('%Y-%m')}"
 if st.session_state.latest_monthly_record_key != record_context_key:
-    st.session_state.latest_monthly_record = load_latest_monthly_record(audit_month, st.session_state.user_email)
+    st.session_state.latest_monthly_record = load_latest_monthly_record(
+        st.session_state.user_email,
+        current_date.year,
+        current_date.month,
+    )
     st.session_state.latest_monthly_record_key = record_context_key
     apply_record_defaults(st.session_state.latest_monthly_record)
 
