@@ -72,12 +72,12 @@ def save_to_google_sheets(record, audit_month):
         st.error(f"保存失敗: {str(e)}")
         return False
 
-def load_latest_monthly_record(user_email, target_year, target_month):
-    """載入指定實際月份、指定登入者的最新一筆紀錄"""
+def load_monthly_records(user_email, target_year, target_month):
+    """載入指定實際月份、指定登入者的所有紀錄"""
     try:
         spreadsheet = init_google_sheets()
         if spreadsheet is None:
-            return None
+            return []
 
         normalized_email = str(user_email).strip().lower()
         matched_records = []
@@ -103,9 +103,6 @@ def load_latest_monthly_record(user_email, target_year, target_month):
                 if record_datetime.year == target_year and record_datetime.month == target_month:
                     matched_records.append(record)
 
-        if not matched_records:
-            return None
-
         def sort_key(record):
             date_text = str(record.get("稽核日期", ""))
             time_text = str(record.get("稽核時間", "00:00:00"))
@@ -114,7 +111,18 @@ def load_latest_monthly_record(user_email, target_year, target_month):
             except Exception:
                 return datetime.min
 
-        return sorted(matched_records, key=sort_key)[-1]
+        return sorted(matched_records, key=sort_key)
+    except Exception as e:
+        st.warning(f"載入歷史紀錄失敗: {str(e)}")
+        return []
+
+def load_latest_monthly_record(user_email, target_year, target_month):
+    """載入指定實際月份、指定登入者的最新一筆紀錄"""
+    try:
+        matched_records = load_monthly_records(user_email, target_year, target_month)
+        if not matched_records:
+            return None
+        return matched_records[-1]
     except Exception as e:
         st.warning(f"載入歷史紀錄失敗: {str(e)}")
         return None
@@ -228,6 +236,8 @@ if 'latest_monthly_record' not in st.session_state:
     st.session_state.latest_monthly_record = None
 if 'latest_monthly_record_key' not in st.session_state:
     st.session_state.latest_monthly_record_key = None
+if 'monthly_history_records' not in st.session_state:
+    st.session_state.monthly_history_records = []
 
 # 標題
 col_title, col_user = st.columns([3, 1])
@@ -286,18 +296,25 @@ with col1:
 
 record_context_key = f"{st.session_state.user_email}|{current_date.strftime('%Y-%m')}"
 if st.session_state.latest_monthly_record_key != record_context_key:
-    st.session_state.latest_monthly_record = load_latest_monthly_record(
+    monthly_records = load_monthly_records(
         st.session_state.user_email,
         current_date.year,
         current_date.month,
     )
+    st.session_state.latest_monthly_record = monthly_records[-1] if monthly_records else None
     st.session_state.latest_monthly_record_key = record_context_key
     apply_record_defaults(st.session_state.latest_monthly_record)
+    st.session_state.monthly_history_records = monthly_records
 
-history_record = format_history_record(st.session_state.latest_monthly_record)
-if history_record:
-    with st.expander("📌 你上次本月填寫的紀錄", expanded=True):
-        st.dataframe(pd.DataFrame([history_record]), use_container_width=True, hide_index=True)
+history_records = st.session_state.get("monthly_history_records", [])
+formatted_history_records = [format_history_record(record) for record in history_records]
+formatted_history_records = [record for record in formatted_history_records if record]
+
+if formatted_history_records:
+    with st.expander("📌 你本月填寫的紀錄", expanded=True):
+        history_df = pd.DataFrame(formatted_history_records)
+        history_df.insert(0, "序", range(1, len(history_df) + 1))
+        st.dataframe(history_df, use_container_width=True, hide_index=True)
 else:
     st.info("目前沒有找到你在這個月份的歷史紀錄。")
 
@@ -505,6 +522,14 @@ with col1:
                 if save_to_google_sheets(observation, audit_month):
                     st.session_state.latest_monthly_record = observation
                     st.session_state.latest_monthly_record_key = f"{st.session_state.user_email}|{audit_month}"
+                    st.session_state.monthly_history_records.append(observation)
+                    st.session_state.monthly_history_records = sorted(
+                        st.session_state.monthly_history_records,
+                        key=lambda record: datetime.strptime(
+                            f"{record.get('稽核日期', '')} {record.get('稽核時間', '00:00:00')}",
+                            "%Y-%m-%d %H:%M:%S",
+                        ),
+                    )
                     st.session_state.current_observations.append(observation)
                     st.success("✅ 觀察記錄已成功保存！")
                     st.balloons()
