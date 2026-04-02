@@ -306,18 +306,6 @@ if st.session_state.latest_monthly_record_key != record_context_key:
     apply_record_defaults(st.session_state.latest_monthly_record)
     st.session_state.monthly_history_records = monthly_records
 
-history_records = st.session_state.get("monthly_history_records", [])
-formatted_history_records = [format_history_record(record) for record in history_records]
-formatted_history_records = [record for record in formatted_history_records if record]
-
-if formatted_history_records:
-    with st.expander("📌 你本月填寫的紀錄", expanded=True):
-        history_df = pd.DataFrame(formatted_history_records)
-        history_df.insert(0, "序", range(1, len(history_df) + 1))
-        st.dataframe(history_df, use_container_width=True, hide_index=True)
-else:
-    st.info("目前沒有找到你在這個月份的歷史紀錄。")
-
 with col2:
     departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W", 
                    "內科", "外科", "精神科", "復健科", "放射科", "檢驗科", "感管中心", 
@@ -552,76 +540,66 @@ with col2:
 report_records = st.session_state.get("monthly_history_records", [])
 if report_records:
     st.markdown("---")
-    
-    # 統計資訊
-    df_current = pd.DataFrame(report_records)
-    total_count = len(df_current)
-    staff_counts = df_current['受稽核人員類別'].value_counts().to_dict()
-    
-    st.subheader("📊 稽核統計")
-    
-    # 總稽核次數使用大卡片
-    st.metric("總稽核次數", total_count, help="本月所有填報紀錄的總觀察次數")
-    
-    # 各人員次數用小字體表格顯示
-    st.markdown("<p style='font-size: 14px; margin-top: 10px; margin-bottom: 5px;'><b>各受稽人員次數</b></p>", unsafe_allow_html=True)
-    
-    # 創建橫向顯示的統計資料
-    staff_items = list(staff_counts.items())
-    staff_summary = " | ".join([f"{staff}: {count}次" for staff, count in staff_items])
-    st.markdown(f"<p style='font-size: 13px;'>{staff_summary}</p>", unsafe_allow_html=True)
+    st.subheader("📊 稽核統計報表")
 
+    df_current = pd.DataFrame(report_records)
     month_column = "稽核列計月份" if "稽核列計月份" in df_current.columns else "稽核月份"
-    if month_column not in df_current.columns:
-        month_column = None
 
     def month_sort_key(month_text):
         month_text = str(month_text).strip()
         digits = "".join(ch for ch in month_text if ch.isdigit())
         return int(digits) if digits else 99
 
-    if month_column:
-        st.markdown("---")
-        st.subheader("📅 依稽核列計月份分開計算")
-
+    if month_column in df_current.columns:
         month_groups = df_current.groupby(month_column, dropna=False)
-        for month_name in sorted(month_groups.groups.keys(), key=month_sort_key):
+        sorted_months = sorted(month_groups.groups.keys(), key=month_sort_key)
+
+        for month_name in sorted_months:
             month_df = month_groups.get_group(month_name).copy()
             month_total = len(month_df)
+            month_staff_counts = month_df["受稽核人員類別"].value_counts().to_dict()
+            month_staff_summary = " | ".join([f"{staff}: {count}次" for staff, count in month_staff_counts.items()])
 
-            st.markdown(f"#### {month_name}")
-            st.metric(f"{month_name} 稽核次數", month_total, help=f"{month_name} 的填報筆數")
+            st.markdown(f"### {month_name}")
+            st.markdown(f"- **{month_name}稽核次數：** 總稽核次數{month_total}次")
+            st.markdown(f"- **{month_name}各受稽人員次數：** {month_staff_summary if month_staff_summary else '無資料'}")
 
-            display_columns = [month_column, "稽核者單位", "受稽核人員類別", "受稽核者單位", "手部衛生時機", "手部衛生方式", "手部衛生正確性", "不正確原因"]
+            display_columns = [
+                month_column,
+                "稽核日期",
+                "稽核時間",
+                "稽核者單位",
+                "稽核人員",
+                "受稽核人員類別",
+                "受稽核者單位",
+                "手部衛生時機",
+                "手部衛生方式",
+                "手部衛生正確性",
+                "不正確原因",
+            ]
             display_columns = [column for column in display_columns if column in month_df.columns]
             month_display = month_df[display_columns].copy()
-            month_display.rename(columns={month_column: "稽核列計月份"}, inplace=True)
+            month_display.rename(
+                columns={
+                    month_column: "稽核列計月份",
+                    "稽核時間": "時間",
+                    "稽核人員": "稽核者人員",
+                },
+                inplace=True,
+            )
             month_display.insert(0, "序", range(1, len(month_display) + 1))
 
             st.dataframe(
                 month_display,
                 use_container_width=True,
-                height=min(360, 50 + len(month_display) * 35),
-                hide_index=True
+                height=min(420, 50 + len(month_display) * 35),
+                hide_index=True,
             )
-            
-            if month_name != sorted(month_groups.groups.keys(), key=month_sort_key)[-1]:
+
+            if month_name != sorted_months[-1]:
                 st.markdown("---")
-    
-    st.markdown("---")
-    st.subheader("📝 本月填報總表")
-
-    display_columns = ["稽核列計月份", "稽核者單位", "受稽核人員類別", "受稽核者單位", "手部衛生時機", "手部衛生方式", "手部衛生正確性", "不正確原因"]
-    display_columns = [column for column in display_columns if column in df_current.columns]
-    df_display = df_current[display_columns].copy()
-    df_display.insert(0, "序", range(1, len(df_display) + 1))
-
-    st.dataframe(
-        df_display,
-        use_container_width=True,
-        height=min(400, 50 + len(df_display) * 35),
-        hide_index=True
-    )
+    else:
+        st.info("目前資料缺少稽核列計月份欄位，無法依月份統計。")
 
 # 頁尾
 st.markdown("---")
