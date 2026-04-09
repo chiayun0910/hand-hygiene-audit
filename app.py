@@ -79,6 +79,15 @@ def load_monthly_records(user_email, target_year, target_month):
         if spreadsheet is None:
             return []
 
+        taiwan_now = datetime.now(timezone(timedelta(hours=8)))
+        is_current_target_month = (
+            taiwan_now.year == target_year and
+            taiwan_now.month == target_month
+        )
+        is_after_cutoff_for_current_month = is_current_target_month and taiwan_now.day > 5
+        current_month_label = f"{target_month}月"
+        previous_month_label = f"{12 if target_month == 1 else target_month - 1}月"
+
         def extract_month_from_sheet_title(sheet_title):
             """從工作表名稱（例：2026年3月、3月、2026/3）解析月份"""
             import re
@@ -138,6 +147,16 @@ def load_monthly_records(user_email, target_year, target_month):
                     month_value = str(record.get("稽核列計月份", "")).strip()
                     legacy_month_value = str(record.get("稽核月份", "")).strip()
                     resolved_month = month_value or legacy_month_value or sheet_month_fallback
+
+                    if is_current_target_month:
+                        # 每月 6 日起，僅顯示當月稽核月份。
+                        if is_after_cutoff_for_current_month and resolved_month != current_month_label:
+                            continue
+                        # 每月 5 日(含)以前，僅顯示當月與前一個月稽核月份。
+                        if (not is_after_cutoff_for_current_month) and (
+                            resolved_month not in {current_month_label, previous_month_label}
+                        ):
+                            continue
 
                     normalized_record = dict(record)
                     normalized_record["稽核列計月份"] = resolved_month
@@ -299,7 +318,7 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     # 限制月份選擇：每月5日後只能選擇當月，5日前可選擇當月或前一個月
-    current_date = datetime.now()
+    current_date = datetime.now(timezone(timedelta(hours=8)))
     current_month = current_date.month
     current_day = current_date.day
     all_months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
