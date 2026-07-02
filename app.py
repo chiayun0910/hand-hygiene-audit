@@ -371,12 +371,24 @@ with col1:
         help=help_text
     )
 
-record_context_key = f"{st.session_state.user_email}|{current_date.strftime('%Y-%m')}"
+def parse_month_number(month_text):
+    month_text = str(month_text).strip()
+    digits = "".join(ch for ch in month_text if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        month_num = int(digits)
+    except ValueError:
+        return None
+    return month_num if 1 <= month_num <= 12 else None
+
+selected_audit_month_num = parse_month_number(audit_month) or current_date.month
+record_context_key = f"{st.session_state.user_email}|{current_date.year}-{selected_audit_month_num:02d}"
 history_cache_version = st.session_state.get("history_cache_version", 0)
 monthly_records = load_monthly_records(
     st.session_state.user_email,
     current_date.year,
-    current_date.month,
+    selected_audit_month_num,
     history_cache_version,
 )
 st.session_state.latest_monthly_record = monthly_records[-1] if monthly_records else None
@@ -619,36 +631,14 @@ with col2:
 # 顯示本月填報報表
 report_records = st.session_state.get("monthly_history_records", [])
 if report_records:
-    taiwan_now = datetime.now(timezone(timedelta(hours=8)))
-    current_month_num = taiwan_now.month
-    previous_month_num = 12 if current_month_num == 1 else current_month_num - 1
-
-    def parse_month_number(month_text):
-        month_text = str(month_text).strip()
-        digits = "".join(ch for ch in month_text if ch.isdigit())
-        if not digits:
-            return None
-        try:
-            month_num = int(digits)
-        except ValueError:
-            return None
-        return month_num if 1 <= month_num <= 12 else None
-
     def get_record_month_num(record):
         month_text = record.get("稽核列計月份", record.get("稽核月份", ""))
         return parse_month_number(month_text)
 
-    # 保險過濾：5日(含)前顯示當月+前月，6日起僅顯示當月。
-    if taiwan_now.day > 5:
-        report_records = [
-            record for record in report_records
-            if get_record_month_num(record) == current_month_num
-        ]
-    else:
-        report_records = [
-            record for record in report_records
-            if get_record_month_num(record) in {current_month_num, previous_month_num}
-        ]
+    report_records = [
+        record for record in report_records
+        if get_record_month_num(record) == selected_audit_month_num
+    ]
 
 if report_records:
     st.markdown("---")
