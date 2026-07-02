@@ -127,12 +127,15 @@ def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
         def sheet_name_candidates(year, month):
             return [f"{year}年{month}月", f"{year}年{month}", f"{month}月"]
 
+        # 一次取得所有工作表清單（單一 API 呼叫），再於本機比對名稱，
+        # 避免對 Google Sheets 重複發送 metadata 查詢造成配額吃緊。
+        all_worksheets = spreadsheet.worksheets()
+        worksheets_by_title = {ws.title: ws for ws in all_worksheets}
+
         def find_worksheet(names):
             for sheet_name in names:
-                try:
-                    return spreadsheet.worksheet(sheet_name)
-                except Exception:
-                    continue
+                if sheet_name in worksheets_by_title:
+                    return worksheets_by_title[sheet_name]
             return None
 
         # 稽核紀錄依「稽核列計月份」存放到對應工作表，補登資料的實際送出日期
@@ -151,7 +154,7 @@ def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
                 worksheets_to_scan.append(prev_ws)
 
         if not worksheets_to_scan:
-            worksheets_to_scan = spreadsheet.worksheets()
+            worksheets_to_scan = all_worksheets
 
         for worksheet in worksheets_to_scan:
             sheet_month_fallback = extract_month_from_sheet_title(worksheet.title)
@@ -580,7 +583,7 @@ st.markdown("---")
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("✅ 提交此次觀察", type="primary", use_container_width=True):
+    if st.button("✅ 紀錄觀察", type="primary", use_container_width=True):
         # 驗證必填欄位
         if not auditor:
             st.error("請填寫稽核人員姓名！")
@@ -611,9 +614,9 @@ with col1:
             # 保存到 Google Sheets
             with st.spinner("正在保存到雲端..."):
                 if save_to_google_sheets(observation, audit_month):
-                    # 清除快取，避免其他使用者的瀏覽器工作階段仍讀到送出前
-                    # 快取住的（可能是空的）舊查詢結果。
-                    load_monthly_records.clear()
+                    # 遞增本人 session 的 cache_buster，讓自己立即看到最新資料；
+                    # 其他使用者則依 120 秒 TTL 自然更新，避免每次送出都對
+                    # Google Sheets 觸發大量並行讀取（曾造成配額超限、紀錄消失）。
                     st.session_state.history_cache_version = st.session_state.get("history_cache_version", 0) + 1
                     st.session_state.latest_monthly_record = observation
                     st.session_state.latest_monthly_record_key = f"{st.session_state.user_email}|{audit_month}"
