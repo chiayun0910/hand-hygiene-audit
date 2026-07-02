@@ -138,25 +138,32 @@ def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
                     return worksheets_by_title[sheet_name]
             return None
 
-        # 稽核紀錄依「稽核列計月份」存放到對應工作表，補登資料的實際送出日期
-        # 可能落在下個月，因此在寬限期內（當月且5日以前）必須同時掃描當月與
-        # 前一個月的工作表，否則補登的前一個月資料會被漏掉。
+        # 稽核紀錄依「稽核列計月份」存放到對應工作表。補登資料是實際送出日期
+        # 落在下個月、但內容月份仍是上個月，所以比對時必須用「稽核列計月份」
+        # （內容月份）而非實際送出時間，否則補登資料無論在哪個月份頁籤都
+        # 篩不到。在寬限期內（目前檢視的是當月、且在5日以前）額外掃描前一個
+        # 月的工作表，讓當月頁籤能一併看到前一個月的補登彙總。
         worksheets_to_scan = []
         target_ws = find_worksheet(sheet_name_candidates(target_year, target_month))
         if target_ws is not None:
-            worksheets_to_scan.append(target_ws)
+            worksheets_to_scan.append((target_ws, current_month_label))
 
         if is_current_target_month and not is_after_cutoff_for_current_month:
             prev_year = target_year - 1 if target_month == 1 else target_year
             prev_month = 12 if target_month == 1 else target_month - 1
             prev_ws = find_worksheet(sheet_name_candidates(prev_year, prev_month))
-            if prev_ws is not None and prev_ws.title not in {ws.title for ws in worksheets_to_scan}:
-                worksheets_to_scan.append(prev_ws)
+            if prev_ws is not None and prev_ws.title not in {ws.title for ws, _ in worksheets_to_scan}:
+                worksheets_to_scan.append((prev_ws, previous_month_label))
 
         if not worksheets_to_scan:
-            worksheets_to_scan = all_worksheets
+            allowed_labels = {current_month_label}
+            if is_current_target_month and not is_after_cutoff_for_current_month:
+                allowed_labels.add(previous_month_label)
+            worksheets_to_scan = [(ws, None) for ws in all_worksheets]
+        else:
+            allowed_labels = None
 
-        for worksheet in worksheets_to_scan:
+        for worksheet, expected_label in worksheets_to_scan:
             sheet_month_fallback = extract_month_from_sheet_title(worksheet.title)
 
             try:
@@ -168,32 +175,19 @@ def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
                 if str(record.get("登入者Email", "")).strip().lower() != normalized_email:
                     continue
 
-                date_text = str(record.get("稽核日期", ""))
-                time_text = str(record.get("稽核時間", "00:00:00"))
+                month_value = str(record.get("稽核列計月份", "")).strip()
+                legacy_month_value = str(record.get("稽核月份", "")).strip()
+                resolved_month = month_value or legacy_month_value or sheet_month_fallback
 
-                try:
-                    record_datetime = datetime.strptime(f"{date_text} {time_text}", "%Y-%m-%d %H:%M:%S")
-                except Exception:
+                if expected_label is not None:
+                    if resolved_month != expected_label:
+                        continue
+                elif resolved_month not in allowed_labels:
                     continue
 
-                if record_datetime.year == target_year and record_datetime.month == target_month:
-                    month_value = str(record.get("稽核列計月份", "")).strip()
-                    legacy_month_value = str(record.get("稽核月份", "")).strip()
-                    resolved_month = month_value or legacy_month_value or sheet_month_fallback
-
-                    if is_current_target_month:
-                        # 每月 6 日起，僅顯示當月稽核月份。
-                        if is_after_cutoff_for_current_month and resolved_month != current_month_label:
-                            continue
-                        # 每月 5 日(含)以前，僅顯示當月與前一個月稽核月份。
-                        if (not is_after_cutoff_for_current_month) and (
-                            resolved_month not in {current_month_label, previous_month_label}
-                        ):
-                            continue
-
-                    normalized_record = dict(record)
-                    normalized_record["稽核列計月份"] = resolved_month
-                    matched_records.append(normalized_record)
+                normalized_record = dict(record)
+                normalized_record["稽核列計月份"] = resolved_month
+                matched_records.append(normalized_record)
 
         def sort_key(record):
             date_text = str(record.get("稽核日期", ""))
