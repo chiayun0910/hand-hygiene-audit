@@ -312,7 +312,7 @@ st.markdown(
         margin-bottom: -14px;
     }
     div[data-testid="stRadio"] label p {
-        font-size: 0.85rem;
+        font-size: 0.92rem;
     }
     </style>
     """,
@@ -552,11 +552,8 @@ with right_col:
 
         notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
 
-# 按鈕放進右側卡片「正確性評估」欄位下方的空白處。
-with col_correct:
-    st.write("")
-    col1 = st.container()
-    col2 = st.container()
+        # 按鈕並排放在備註下方。
+        col1, col2 = st.columns(2)
 
 with col1:
     if st.button("✅ 紀錄觀察", type="primary", use_container_width=True):
