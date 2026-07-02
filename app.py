@@ -197,7 +197,7 @@ def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
             except Exception:
                 return datetime.min
 
-        return sorted(matched_records, key=sort_key)
+        return sorted(matched_records, key=sort_key, reverse=True)
     except Exception as e:
         st.warning(f"載入歷史紀錄失敗: {str(e)}")
         return []
@@ -208,7 +208,7 @@ def load_latest_monthly_record(user_email, target_year, target_month, cache_bust
         matched_records = load_monthly_records(user_email, target_year, target_month, cache_buster)
         if not matched_records:
             return None
-        return matched_records[-1]
+        return matched_records[0]
     except Exception as e:
         st.warning(f"載入歷史紀錄失敗: {str(e)}")
         return None
@@ -400,7 +400,7 @@ monthly_records = load_monthly_records(
     selected_audit_month_num,
     history_cache_version,
 )
-st.session_state.latest_monthly_record = monthly_records[-1] if monthly_records else None
+st.session_state.latest_monthly_record = monthly_records[0] if monthly_records else None
 if st.session_state.latest_monthly_record_key != record_context_key:
     apply_record_defaults(st.session_state.latest_monthly_record)
 st.session_state.latest_monthly_record_key = record_context_key
@@ -621,6 +621,7 @@ with col1:
                             f"{record.get('稽核日期', '')} {record.get('稽核時間', '00:00:00')}",
                             "%Y-%m-%d %H:%M:%S",
                         ),
+                        reverse=True,
                     )
                     st.session_state.current_observations.append(observation)
                     st.success("✅ 觀察記錄已成功保存！")
