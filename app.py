@@ -72,7 +72,8 @@ def save_to_google_sheets(record, audit_month):
         st.error(f"保存失敗: {str(e)}")
         return False
 
-def load_monthly_records(user_email, target_year, target_month):
+@st.cache_data(show_spinner=False)
+def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
     """載入指定實際月份、指定登入者的所有紀錄"""
     try:
         spreadsheet = init_google_sheets()
@@ -123,7 +124,24 @@ def load_monthly_records(user_email, target_year, target_month):
         normalized_email = str(user_email).strip().lower()
         matched_records = []
 
-        for worksheet in spreadsheet.worksheets():
+        target_sheet_names = [
+            f"{target_year}年{target_month}月",
+            f"{target_year}年{target_month}",
+            f"{target_month}月",
+        ]
+
+        worksheets_to_scan = []
+        for sheet_name in target_sheet_names:
+            try:
+                worksheets_to_scan = [spreadsheet.worksheet(sheet_name)]
+                break
+            except Exception:
+                continue
+
+        if not worksheets_to_scan:
+            worksheets_to_scan = spreadsheet.worksheets()
+
+        for worksheet in worksheets_to_scan:
             sheet_month_fallback = extract_month_from_sheet_title(worksheet.title)
 
             try:
@@ -175,10 +193,10 @@ def load_monthly_records(user_email, target_year, target_month):
         st.warning(f"載入歷史紀錄失敗: {str(e)}")
         return []
 
-def load_latest_monthly_record(user_email, target_year, target_month):
+def load_latest_monthly_record(user_email, target_year, target_month, cache_buster=0):
     """載入指定實際月份、指定登入者的最新一筆紀錄"""
     try:
-        matched_records = load_monthly_records(user_email, target_year, target_month)
+        matched_records = load_monthly_records(user_email, target_year, target_month, cache_buster)
         if not matched_records:
             return None
         return matched_records[-1]
@@ -354,10 +372,12 @@ with col1:
     )
 
 record_context_key = f"{st.session_state.user_email}|{current_date.strftime('%Y-%m')}"
+history_cache_version = st.session_state.get("history_cache_version", 0)
 monthly_records = load_monthly_records(
     st.session_state.user_email,
     current_date.year,
     current_date.month,
+    history_cache_version,
 )
 st.session_state.latest_monthly_record = monthly_records[-1] if monthly_records else None
 if st.session_state.latest_monthly_record_key != record_context_key:
@@ -567,6 +587,7 @@ with col1:
             # 保存到 Google Sheets
             with st.spinner("正在保存到雲端..."):
                 if save_to_google_sheets(observation, audit_month):
+                    st.session_state.history_cache_version = st.session_state.get("history_cache_version", 0) + 1
                     st.session_state.latest_monthly_record = observation
                     st.session_state.latest_monthly_record_key = f"{st.session_state.user_email}|{audit_month}"
                     st.session_state.monthly_history_records.append(observation)
