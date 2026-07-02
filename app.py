@@ -337,48 +337,104 @@ with col_user:
 
 st.markdown("---")
 
-# 基本資料區塊
-st.header("📋 稽核基本資料")
+# 稽核基本資料 + 手部衛生行為觀察：雙欄卡片並排，手機版會自動變成單欄堆疊
+current_date = datetime.now(timezone(timedelta(hours=8)))
+current_month = current_date.month
+current_day = current_date.day
+all_months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
 
-# 第一列：稽核月份、稽核單位、稽核人員
-col1, col2, col3 = st.columns(3)
+# 根據日期決定可選擇的月份：5日前（含5日）可選當月或前一個月，之後只能選當月
+if current_day <= 5:
+    if current_month == 1:
+        available_months = [all_months[0]]
+    else:
+        available_months = [all_months[current_month - 2], all_months[current_month - 1]]
+else:
+    available_months = [all_months[current_month - 1]]
 
-with col1:
-    # 限制月份選擇：每月5日後只能選擇當月，5日前可選擇當月或前一個月
-    current_date = datetime.now(timezone(timedelta(hours=8)))
-    current_month = current_date.month
-    current_day = current_date.day
-    all_months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
-    
-    # 根據日期決定可選擇的月份
-    if current_day <= 5:
-        # 5日前（含5日），可選擇當月或前一個月
-        if current_month == 1:
-            # 1月時，前一個月是去年12月，但只顯示1月
-            available_months = [all_months[0]]
+current_month_str = all_months[current_month - 1]
+default_index = available_months.index(current_month_str)
+
+help_text = f"目前是{current_month}月{current_day}日，"
+help_text += "可選擇當月或前一個月" if current_day <= 5 else "只能選擇當月"
+
+departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W",
+               "內科", "外科", "精神科", "復健科", "放射科", "檢驗科", "感管中心",
+               "松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照", "其他(請註明)"]
+
+staff_categories = ["護理師", "照服員", "外籍照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
+                     "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
+                     "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
+                     "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"]
+
+left_col, right_col = st.columns(2)
+
+with left_col:
+    with st.container(border=True):
+        st.markdown("#### 📋 稽核基本資料")
+
+        audit_month = st.selectbox(
+            "📅 稽核列計月份",
+            available_months,
+            index=default_index,
+            help=help_text
+        )
+
+        department = st.selectbox(
+            "🏥 隸屬稽核單位/病房",
+            departments,
+            index=departments.index(st.session_state.department) if st.session_state.department in departments else 0,
+            key="department_select"
+        )
+        if department == "其他(請註明)":
+            department = st.text_input("請註明單位", key="department_other")
+        st.session_state.department = department
+
+        auditor = st.text_input(
+            "👨‍⚕️ 稽核人員姓名",
+            value=st.session_state.auditor,
+            placeholder="請輸入姓名",
+            key="auditor_input"
+        )
+        st.session_state.auditor = auditor
+
+        staff_category = st.selectbox(
+            "👥 受稽核人員類別",
+            staff_categories,
+            index=staff_categories.index(st.session_state.staff_category) if st.session_state.staff_category in staff_categories else 0,
+            key="staff_category_select"
+        )
+        if staff_category == "其他(請註明)":
+            staff_category = st.text_input("請註明人員類別", key="staff_category_other")
+        st.session_state.staff_category = staff_category
+
+        if 'staff_unit_type' not in st.session_state:
+            st.session_state.staff_unit_type = "同隸屬稽核單位/病房"
+
+        staff_unit_type = st.radio(
+            "🏫 受稽核人員單位",
+            ["同隸屬稽核單位/病房", "另選隸屬單位"],
+            key="staff_unit_type_select",
+            horizontal=True
+        )
+        st.session_state.staff_unit_type = staff_unit_type
+
+        if staff_unit_type == "另選隸屬單位":
+            if 'staff_unit' not in st.session_state:
+                st.session_state.staff_unit = "ER"
+
+            staff_unit = st.selectbox(
+                "選擇單位",
+                departments,
+                index=departments.index(st.session_state.staff_unit) if st.session_state.staff_unit in departments else 0,
+                key="staff_unit_select",
+                label_visibility="collapsed"
+            )
+            if staff_unit == "其他(請註明)":
+                staff_unit = st.text_input("請註明單位", key="staff_unit_other")
+            st.session_state.staff_unit = staff_unit
         else:
-            # 其他月份，可選擇前一個月和當月（前一個月在前）
-            available_months = [all_months[current_month - 2], all_months[current_month - 1]]
-    else:
-        # 5日後，只能選擇當月
-        available_months = [all_months[current_month - 1]]
-    
-    # 預設選擇當月（當月一定在可選範圍內）
-    current_month_str = all_months[current_month - 1]
-    default_index = available_months.index(current_month_str)
-    
-    help_text = f"目前是{current_month}月{current_day}日，"
-    if current_day <= 5:
-        help_text += "可選擇當月或前一個月"
-    else:
-        help_text += "只能選擇當月"
-    
-    audit_month = st.selectbox(
-        "📅 稽核列計月份",
-        available_months,
-        index=default_index,
-        help=help_text
-    )
+            st.session_state.staff_unit = st.session_state.department
 
 def parse_month_number(month_text):
     month_text = str(month_text).strip()
@@ -406,172 +462,76 @@ if st.session_state.latest_monthly_record_key != record_context_key:
 st.session_state.latest_monthly_record_key = record_context_key
 st.session_state.monthly_history_records = monthly_records
 
-with col2:
-    departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W", 
-                   "內科", "外科", "精神科", "復健科", "放射科", "檢驗科", "感管中心", 
-                   "松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照", "其他(請註明)"]
-    
-    department = st.selectbox(
-        "🏥 隸屬稽核單位/病房",
-        departments,
-        index=departments.index(st.session_state.department) if st.session_state.department in departments else 0,
-        key="department_select"
-    )
-    
-    if department == "其他(請註明)":
-        department = st.text_input("請註明單位", key="department_other")
-    
-    st.session_state.department = department
+with right_col:
+    with st.container(border=True):
+        st.markdown("#### 🔍 手部衛生行為觀察")
 
-with col3:
-    auditor = st.text_input(
-        "👨‍⚕️ 稽核人員姓名",
-        value=st.session_state.auditor,
-        placeholder="請輸入姓名",
-        key="auditor_input"
-    )
-    st.session_state.auditor = auditor
-
-# 第二列：受稽核人員類別、受稽核人員單位
-col1, col2 = st.columns(2)
-
-with col1:
-    staff_category = st.selectbox(
-        "👥 受稽核人員類別",
-         ["護理師", "照服員", "外籍照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
-         "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
-         "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
-         "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"],
-         index=["護理師", "照服員", "外籍照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
-               "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
-               "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
-             "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"].index(st.session_state.staff_category) if st.session_state.staff_category in ["護理師", "照服員", "外籍照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師", "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師", "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師", "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"] else 0,
-        key="staff_category_select"
-    )
-    
-    if staff_category == "其他(請註明)":
-        staff_category = st.text_input("請註明人員類別", key="staff_category_other")
-    
-    st.session_state.staff_category = staff_category
-
-with col2:
-    # 初始化 staff_unit_type
-    if 'staff_unit_type' not in st.session_state:
-        st.session_state.staff_unit_type = "同隸屬稽核單位/病房"
-    
-    staff_unit_type = st.radio(
-        "🏫 受稽核人員單位",
-        ["同隸屬稽核單位/病房", "另選隸屬單位"],
-        key="staff_unit_type_select",
-        horizontal=True
-    )
-    st.session_state.staff_unit_type = staff_unit_type
-    
-    # 如果選擇「另選隸屬單位」，顯示單位選擇
-    if staff_unit_type == "另選隸屬單位":
-        if 'staff_unit' not in st.session_state:
-            st.session_state.staff_unit = "ER"
-        
-        staff_unit = st.selectbox(
-            "選擇單位",
-            departments,
-            index=departments.index(st.session_state.staff_unit) if st.session_state.staff_unit in departments else 0,
-            key="staff_unit_select",
+        st.markdown("**1️⃣ 手部衛生時機**")
+        hand_hygiene_moment = st.radio(
+            "請選擇觀察時機",
+            [
+                "時機1: 接觸病人前",
+                "時機2: 執行清潔/無菌操作技術前",
+                "時機3: 暴露病人體液風險後",
+                "時機4: 接觸病人後",
+                "時機5: 接觸病人周遭環境後"
+            ],
+            key="hand_hygiene_moment",
             label_visibility="collapsed"
         )
-        
-        if staff_unit == "其他(請註明)":
-            staff_unit = st.text_input("請註明單位", key="staff_unit_other")
-        
-        st.session_state.staff_unit = staff_unit
-    else:
-        st.session_state.staff_unit = st.session_state.department
 
-st.markdown("---")
-
-# 手部衛生觀察區塊
-st.header("🔍 手部衛生行為觀察")
-
-col_obs1, col_obs2 = st.columns(2)
-
-with col_obs1:
-    # 1. 選擇觀察時機
-    st.markdown("#### 1️⃣ 手部衛生時機")
-    hand_hygiene_moment = st.radio(
-        "請選擇觀察時機",
-        [
-            "時機1: 接觸病人前",
-            "時機2: 執行清潔/無菌操作技術前",
-            "時機3: 暴露病人體液風險後",
-            "時機4: 接觸病人後",
-            "時機5: 接觸病人周遭環境後"
-        ],
-        key="hand_hygiene_moment",
-        label_visibility="collapsed"
-    )
-
-with col_obs2:
-    # 2. 選擇手部衛生執行方式
-    st.markdown("#### 2️⃣ 執行方式")
-    hygiene_method = st.radio(
-        "請選擇執行方式",
-        ["乾洗手（酒精性乾洗手液）", "濕洗手（肥皂和水）", "沒有洗手"],
-        key="hygiene_method",
-        label_visibility="collapsed"
-    )
-
-# 初始化變數
-technique_correct = None
-incorrect_reason = None
-
-if hygiene_method != "沒有洗手":
-    st.markdown("---")
-    st.markdown("#### 3️⃣ 正確性評估")
-    
-    col_correct1, col_correct2 = st.columns([1, 2])
-    
-    with col_correct1:
-        technique_correct = st.radio(
-            "執行正確性",
-            ["正確(七步驟完全正確)", "不正確"],
-            key="technique_correct"
+        st.markdown("**2️⃣ 執行方式**")
+        hygiene_method = st.radio(
+            "請選擇執行方式",
+            ["乾洗手（酒精性乾洗手液）", "濕洗手（肥皂和水）", "沒有洗手"],
+            key="hygiene_method",
+            label_visibility="collapsed"
         )
-    
-    with col_correct2:
-        if technique_correct == "不正確":
-            # 根據乾洗手或濕洗手顯示不同的不正確原因（支援複選）
-            if hygiene_method == "乾洗手（酒精性乾洗手液）":
-                incorrect_options = ["步驟不完整", "戴手套洗手", "搓揉時間過短(少於20-30秒)或未搓到全乾", 
-                                    "乾洗手液量不足"]
-            else:  # 濕洗手
-                incorrect_options = ["步驟不完整", "戴手套洗手", "未使用洗手劑(含肥皂)洗手", 
-                                    "洗手後未擦乾", "洗手時間過短(少於40-60秒)"]
-            
-            st.write("**不正確原因（可複選）**")
-            selected_reasons = []
-            
-            # 使用 checkbox 顯示所有選項
-            for option in incorrect_options:
-                if st.checkbox(option, key=f"incorrect_{option}"):
-                    selected_reasons.append(option)
-            
-            # 「其他」選項
-            other_checked = st.checkbox("其他(請註明)", key="incorrect_other_checkbox")
-            if other_checked:
-                other_reason = st.text_input("請註明原因", key="incorrect_reason_other")
-                if other_reason:
-                    selected_reasons.append(other_reason)
-            
-            # 將複選結果合併為字串
-            incorrect_reason = ", ".join(selected_reasons) if selected_reasons else None
-        else:
-            incorrect_reason = None
 
-# 備註
-st.markdown("---")
-notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
+        # 初始化變數
+        technique_correct = None
+        incorrect_reason = None
 
-# 提交和結束按鈕
+        if hygiene_method != "沒有洗手":
+            st.markdown("**3️⃣ 正確性評估**")
+            technique_correct = st.radio(
+                "執行正確性",
+                ["正確(七步驟完全正確)", "不正確"],
+                key="technique_correct",
+                label_visibility="collapsed"
+            )
+
+            if technique_correct == "不正確":
+                # 根據乾洗手或濕洗手顯示不同的不正確原因（支援複選）
+                if hygiene_method == "乾洗手（酒精性乾洗手液）":
+                    incorrect_options = ["步驟不完整", "戴手套洗手", "搓揉時間過短(少於20-30秒)或未搓到全乾",
+                                        "乾洗手液量不足"]
+                else:  # 濕洗手
+                    incorrect_options = ["步驟不完整", "戴手套洗手", "未使用洗手劑(含肥皂)洗手",
+                                        "洗手後未擦乾", "洗手時間過短(少於40-60秒)"]
+
+                st.write("**不正確原因（可複選）**")
+                selected_reasons = []
+
+                # 使用 checkbox 顯示所有選項
+                for option in incorrect_options:
+                    if st.checkbox(option, key=f"incorrect_{option}"):
+                        selected_reasons.append(option)
+
+                # 「其他」選項
+                other_checked = st.checkbox("其他(請註明)", key="incorrect_other_checkbox")
+                if other_checked:
+                    other_reason = st.text_input("請註明原因", key="incorrect_reason_other")
+                    if other_reason:
+                        selected_reasons.append(other_reason)
+
+                # 將複選結果合併為字串
+                incorrect_reason = ", ".join(selected_reasons) if selected_reasons else None
+            else:
+                incorrect_reason = None
+
+        notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
+
 st.markdown("---")
 
 col1, col2 = st.columns(2)
@@ -736,10 +696,11 @@ if report_records:
         )
         report_display.insert(0, "序", range(1, len(report_display) + 1))
 
+        # 固定高度＋內建捲軸，避免列數一多就把整頁往下撐長。
         st.dataframe(
             report_display,
             use_container_width=True,
-            height=min(520, 50 + len(report_display) * 35),
+            height=400,
             hide_index=True,
         )
     else:
