@@ -367,7 +367,7 @@ staff_categories = ["護理師", "照服員", "外籍照服員", "傳送/班長"
                      "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
                      "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"]
 
-left_col, right_col = st.columns(2)
+left_col, right_col = st.columns([1, 3])
 
 with left_col:
     with st.container(border=True):
@@ -498,7 +498,8 @@ with right_col:
                 "執行正確性",
                 ["正確(七步驟完全正確)", "不正確"],
                 key="technique_correct",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                horizontal=True
             )
 
             if technique_correct == "不正確":
@@ -532,10 +533,12 @@ with right_col:
 
         notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
 
-# 按鈕放回左側卡片下方的空白處，而不是另起一整排。
+# 按鈕放回左側卡片下方的空白處，而不是另起一整排。左側卡片變窄後，
+# 兩個按鈕改成上下堆疊，避免並排太擠。
 with left_col:
     st.write("")
-    col1, col2 = st.columns(2)
+    col1 = st.container()
+    col2 = st.container()
 
 with col1:
     if st.button("✅ 紀錄觀察", type="primary", use_container_width=True):
