@@ -1,6 +1,6 @@
 ﻿import streamlit as st
 import pandas as pd
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -69,81 +69,6 @@ def save_to_google_sheets(record):
         st.error(f"保存失敗: {str(e)}")
         return False
 
-
-def parse_month_number(month_text):
-    month_text = str(month_text).strip()
-    digits = "".join(ch for ch in month_text if ch.isdigit())
-    if not digits:
-        return None
-    try:
-        month_num = int(digits)
-    except ValueError:
-        return None
-    return month_num if 1 <= month_num <= 12 else None
-
-
-@st.cache_data(show_spinner=False)
-def load_history_records(user_email, target_year, target_month, cache_buster=0):
-    """載入指定登入者的歷史紀錄；5日前保留當月與前月。"""
-    try:
-        spreadsheet = init_google_sheets()
-        if spreadsheet is None:
-            return []
-
-        taiwan_now = datetime.now(timezone(timedelta(hours=8)))
-        is_current_target_month = taiwan_now.year == target_year and taiwan_now.month == target_month
-        is_before_cutoff = is_current_target_month and taiwan_now.day <= 5
-
-        allowed_periods = {(target_year, target_month)}
-        if is_before_cutoff:
-            if target_month == 1:
-                allowed_periods.add((target_year - 1, 12))
-            else:
-                allowed_periods.add((target_year, target_month - 1))
-
-        normalized_email = str(user_email).strip().lower()
-        matched_records = []
-
-        for worksheet in spreadsheet.worksheets():
-            try:
-                records = worksheet.get_all_records()
-            except Exception:
-                continue
-
-            for record in records:
-                record_email = str(record.get("登入者Email", "")).strip().lower()
-                if record_email and record_email != normalized_email:
-                    continue
-
-                date_text = str(record.get("稽核日期", ""))
-                time_text = str(record.get("稽核時間", "00:00:00"))
-
-                try:
-                    record_datetime = datetime.strptime(f"{date_text} {time_text}", "%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    continue
-
-                if (record_datetime.year, record_datetime.month) not in allowed_periods:
-                    continue
-
-                month_value = str(record.get("稽核列計月份", record.get("稽核月份", ""))).strip()
-                normalized_record = dict(record)
-                normalized_record["稽核列計月份"] = month_value or f"{record_datetime.month}月"
-                matched_records.append(normalized_record)
-
-        def sort_key(record):
-            date_text = str(record.get("稽核日期", ""))
-            time_text = str(record.get("稽核時間", "00:00:00"))
-            try:
-                return datetime.strptime(f"{date_text} {time_text}", "%Y-%m-%d %H:%M:%S")
-            except Exception:
-                return datetime.min
-
-        return sorted(matched_records, key=sort_key, reverse=True)
-    except Exception as e:
-        st.warning(f"載入歷史紀錄失敗: {str(e)}")
-        return []
-
 # 設置頁面
 st.set_page_config(
     page_title="手部衛生稽核系統",
@@ -168,8 +93,6 @@ if 'basic_info_completed' not in st.session_state:
     st.session_state.basic_info_completed = False
 if 'current_observations' not in st.session_state:
     st.session_state.current_observations = []
-if 'history_cache_version' not in st.session_state:
-    st.session_state.history_cache_version = 0
 
 # 標題
 col_title, col_user = st.columns([3, 1])
@@ -182,36 +105,6 @@ with col_user:
         st.rerun()
 
 st.markdown("---")
-
-current_date = datetime.now(timezone(timedelta(hours=8)))
-history_records = load_history_records(
-    st.session_state.user_email,
-    current_date.year,
-    current_date.month,
-    st.session_state.history_cache_version,
-)
-
-if history_records:
-    st.subheader("📊 稽核歷史紀錄")
-    history_display_columns = [
-        "稽核列計月份",
-        "稽核日期",
-        "稽核時間",
-        "稽核人員",
-        "稽核單位",
-        "受稽核人員類別",
-        "手部衛生時機",
-        "執行方式",
-        "正確性",
-        "不正確原因",
-        "備註",
-    ]
-    history_df = pd.DataFrame(history_records)
-    display_columns = [column for column in history_display_columns if column in history_df.columns]
-    if display_columns:
-        st.dataframe(history_df[display_columns], use_container_width=True, hide_index=True)
-    else:
-        st.dataframe(history_df, use_container_width=True, hide_index=True)
 
 # 步驟1: 填寫基本資料
 if not st.session_state.basic_info_completed:
@@ -370,11 +263,9 @@ else:
                 # 保存到 Google Sheets
                 with st.spinner("正在保存到雲端..."):
                     if save_to_google_sheets(observation):
-                        st.session_state.history_cache_version += 1
                         st.session_state.current_observations.append(observation)
                         st.success("✅ 觀察記錄已成功保存！")
                         st.balloons()
-                        st.rerun()
                     else:
                         st.error("⚠️ 保存失敗，請檢查網路連接")
     
