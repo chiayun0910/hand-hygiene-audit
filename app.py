@@ -631,14 +631,24 @@ with col2:
 # 顯示本月填報報表
 report_records = st.session_state.get("monthly_history_records", [])
 if report_records:
+    taiwan_now = datetime.now(timezone(timedelta(hours=8)))
+    current_month_num = taiwan_now.month
+    previous_month_num = 12 if current_month_num == 1 else current_month_num - 1
+
     def get_record_month_num(record):
         month_text = record.get("稽核列計月份", record.get("稽核月份", ""))
         return parse_month_number(month_text)
 
-    report_records = [
-        record for record in report_records
-        if get_record_month_num(record) == selected_audit_month_num
-    ]
+    if taiwan_now.day > 5:
+        report_records = [
+            record for record in report_records
+            if get_record_month_num(record) == selected_audit_month_num
+        ]
+    else:
+        report_records = [
+            record for record in report_records
+            if get_record_month_num(record) in {selected_audit_month_num, previous_month_num}
+        ]
 
 if report_records:
     st.markdown("---")
