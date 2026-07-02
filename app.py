@@ -532,9 +532,10 @@ with right_col:
 
         notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
 
-st.markdown("---")
-
-col1, col2 = st.columns(2)
+# 按鈕放回左側卡片下方的空白處，而不是另起一整排。
+with left_col:
+    st.write("")
+    col1, col2 = st.columns(2)
 
 with col1:
     if st.button("✅ 紀錄觀察", type="primary", use_container_width=True):
