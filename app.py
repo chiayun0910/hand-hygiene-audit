@@ -466,70 +466,74 @@ with right_col:
     with st.container(border=True):
         st.markdown("#### 🔍 手部衛生行為觀察")
 
-        st.markdown("**1️⃣ 手部衛生時機**")
-        hand_hygiene_moment = st.radio(
-            "請選擇觀察時機",
-            [
-                "時機1: 接觸病人前",
-                "時機2: 執行清潔/無菌操作技術前",
-                "時機3: 暴露病人體液風險後",
-                "時機4: 接觸病人後",
-                "時機5: 接觸病人周遭環境後"
-            ],
-            key="hand_hygiene_moment",
-            label_visibility="collapsed"
-        )
+        col_moment, col_method, col_correct = st.columns(3)
 
-        st.markdown("**2️⃣ 執行方式**")
-        hygiene_method = st.radio(
-            "請選擇執行方式",
-            ["乾洗手（酒精性乾洗手液）", "濕洗手（肥皂和水）", "沒有洗手"],
-            key="hygiene_method",
-            label_visibility="collapsed"
-        )
+        with col_moment:
+            st.markdown("**1️⃣ 手部衛生時機**")
+            hand_hygiene_moment = st.radio(
+                "請選擇觀察時機",
+                [
+                    "時機1: 接觸病人前",
+                    "時機2: 執行清潔/無菌操作技術前",
+                    "時機3: 暴露病人體液風險後",
+                    "時機4: 接觸病人後",
+                    "時機5: 接觸病人周遭環境後"
+                ],
+                key="hand_hygiene_moment",
+                label_visibility="collapsed"
+            )
+
+        with col_method:
+            st.markdown("**2️⃣ 執行方式**")
+            hygiene_method = st.radio(
+                "請選擇執行方式",
+                ["乾洗手（酒精性乾洗手液）", "濕洗手（肥皂和水）", "沒有洗手"],
+                key="hygiene_method",
+                label_visibility="collapsed"
+            )
 
         # 初始化變數
         technique_correct = None
         incorrect_reason = None
 
-        if hygiene_method != "沒有洗手":
-            st.markdown("**3️⃣ 正確性評估**")
-            technique_correct = st.radio(
-                "執行正確性",
-                ["正確(七步驟完全正確)", "不正確"],
-                key="technique_correct",
-                label_visibility="collapsed",
-                horizontal=True
-            )
+        with col_correct:
+            if hygiene_method != "沒有洗手":
+                st.markdown("**3️⃣ 正確性評估**")
+                technique_correct = st.radio(
+                    "執行正確性",
+                    ["正確(七步驟完全正確)", "不正確"],
+                    key="technique_correct",
+                    label_visibility="collapsed"
+                )
 
-            if technique_correct == "不正確":
-                # 根據乾洗手或濕洗手顯示不同的不正確原因（支援複選）
-                if hygiene_method == "乾洗手（酒精性乾洗手液）":
-                    incorrect_options = ["步驟不完整", "戴手套洗手", "搓揉時間過短(少於20-30秒)或未搓到全乾",
-                                        "乾洗手液量不足"]
-                else:  # 濕洗手
-                    incorrect_options = ["步驟不完整", "戴手套洗手", "未使用洗手劑(含肥皂)洗手",
-                                        "洗手後未擦乾", "洗手時間過短(少於40-60秒)"]
+                if technique_correct == "不正確":
+                    # 根據乾洗手或濕洗手顯示不同的不正確原因（支援複選）
+                    if hygiene_method == "乾洗手（酒精性乾洗手液）":
+                        incorrect_options = ["步驟不完整", "戴手套洗手", "搓揉時間過短(少於20-30秒)或未搓到全乾",
+                                            "乾洗手液量不足"]
+                    else:  # 濕洗手
+                        incorrect_options = ["步驟不完整", "戴手套洗手", "未使用洗手劑(含肥皂)洗手",
+                                            "洗手後未擦乾", "洗手時間過短(少於40-60秒)"]
 
-                st.write("**不正確原因（可複選）**")
-                selected_reasons = []
+                    st.write("**不正確原因（可複選）**")
+                    selected_reasons = []
 
-                # 使用 checkbox 顯示所有選項
-                for option in incorrect_options:
-                    if st.checkbox(option, key=f"incorrect_{option}"):
-                        selected_reasons.append(option)
+                    # 使用 checkbox 顯示所有選項
+                    for option in incorrect_options:
+                        if st.checkbox(option, key=f"incorrect_{option}"):
+                            selected_reasons.append(option)
 
-                # 「其他」選項
-                other_checked = st.checkbox("其他(請註明)", key="incorrect_other_checkbox")
-                if other_checked:
-                    other_reason = st.text_input("請註明原因", key="incorrect_reason_other")
-                    if other_reason:
-                        selected_reasons.append(other_reason)
+                    # 「其他」選項
+                    other_checked = st.checkbox("其他(請註明)", key="incorrect_other_checkbox")
+                    if other_checked:
+                        other_reason = st.text_input("請註明原因", key="incorrect_reason_other")
+                        if other_reason:
+                            selected_reasons.append(other_reason)
 
-                # 將複選結果合併為字串
-                incorrect_reason = ", ".join(selected_reasons) if selected_reasons else None
-            else:
-                incorrect_reason = None
+                    # 將複選結果合併為字串
+                    incorrect_reason = ", ".join(selected_reasons) if selected_reasons else None
+                else:
+                    incorrect_reason = None
 
         notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
 
