@@ -303,12 +303,16 @@ st.set_page_config(
     layout="centered"
 )
 
-# 縮小不正確原因複選框之間的垂直間距
+# 縮小不正確原因複選框之間的垂直間距；並將選項文字縮小一點，避免「時機2」等
+# 較長的選項在窄欄位裡折行。
 st.markdown(
     """
     <style>
     div[data-testid="stCheckbox"] {
         margin-bottom: -14px;
+    }
+    div[data-testid="stRadio"] label p {
+        font-size: 0.85rem;
     }
     </style>
     """,
@@ -478,7 +482,7 @@ with right_col:
     with st.container(border=True):
         st.markdown("#### 🔍 手部衛生行為觀察")
 
-        col_moment_method, col_correct = st.columns(2)
+        col_moment_method, col_correct = st.columns([3, 2])
 
         with col_moment_method:
             st.markdown("**1️⃣ 手部衛生時機**")
@@ -548,9 +552,8 @@ with right_col:
 
         notes = st.text_area("💬 備註（選填）", placeholder="請填寫其他觀察事項", height=60, key="notes")
 
-# 按鈕放回左側卡片下方的空白處，而不是另起一整排。左側卡片變窄後，
-# 兩個按鈕改成上下堆疊，避免並排太擠。
-with left_col:
+# 按鈕放進右側卡片「正確性評估」欄位下方的空白處。
+with col_correct:
     st.write("")
     col1 = st.container()
     col2 = st.container()
