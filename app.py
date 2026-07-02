@@ -72,7 +72,7 @@ def save_to_google_sheets(record, audit_month):
         st.error(f"保存失敗: {str(e)}")
         return False
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=120)
 def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
     """載入指定實際月份、指定登入者的所有紀錄"""
     try:
@@ -124,19 +124,31 @@ def load_monthly_records(user_email, target_year, target_month, cache_buster=0):
         normalized_email = str(user_email).strip().lower()
         matched_records = []
 
-        target_sheet_names = [
-            f"{target_year}年{target_month}月",
-            f"{target_year}年{target_month}",
-            f"{target_month}月",
-        ]
+        def sheet_name_candidates(year, month):
+            return [f"{year}年{month}月", f"{year}年{month}", f"{month}月"]
 
+        def find_worksheet(names):
+            for sheet_name in names:
+                try:
+                    return spreadsheet.worksheet(sheet_name)
+                except Exception:
+                    continue
+            return None
+
+        # 稽核紀錄依「稽核列計月份」存放到對應工作表，補登資料的實際送出日期
+        # 可能落在下個月，因此在寬限期內（當月且5日以前）必須同時掃描當月與
+        # 前一個月的工作表，否則補登的前一個月資料會被漏掉。
         worksheets_to_scan = []
-        for sheet_name in target_sheet_names:
-            try:
-                worksheets_to_scan = [spreadsheet.worksheet(sheet_name)]
-                break
-            except Exception:
-                continue
+        target_ws = find_worksheet(sheet_name_candidates(target_year, target_month))
+        if target_ws is not None:
+            worksheets_to_scan.append(target_ws)
+
+        if is_current_target_month and not is_after_cutoff_for_current_month:
+            prev_year = target_year - 1 if target_month == 1 else target_year
+            prev_month = 12 if target_month == 1 else target_month - 1
+            prev_ws = find_worksheet(sheet_name_candidates(prev_year, prev_month))
+            if prev_ws is not None and prev_ws.title not in {ws.title for ws in worksheets_to_scan}:
+                worksheets_to_scan.append(prev_ws)
 
         if not worksheets_to_scan:
             worksheets_to_scan = spreadsheet.worksheets()
@@ -599,6 +611,9 @@ with col1:
             # 保存到 Google Sheets
             with st.spinner("正在保存到雲端..."):
                 if save_to_google_sheets(observation, audit_month):
+                    # 清除快取，避免其他使用者的瀏覽器工作階段仍讀到送出前
+                    # 快取住的（可能是空的）舊查詢結果。
+                    load_monthly_records.clear()
                     st.session_state.history_cache_version = st.session_state.get("history_cache_version", 0) + 1
                     st.session_state.latest_monthly_record = observation
                     st.session_state.latest_monthly_record_key = f"{st.session_state.user_email}|{audit_month}"
