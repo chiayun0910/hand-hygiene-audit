@@ -89,7 +89,8 @@ def load_history_records(user_email, target_year, target_month, cache_buster=0):
         spreadsheet = init_google_sheets()
         if spreadsheet is None:
             return []
-
+        # 判斷是否在當月且在 5 日以前，若是則允許顯示前一個月
+        from datetime import timezone, timedelta
         taiwan_now = datetime.now(timezone(timedelta(hours=8)))
         is_current_target_month = taiwan_now.year == target_year and taiwan_now.month == target_month
         is_before_cutoff = is_current_target_month and taiwan_now.day <= 5
@@ -104,10 +105,41 @@ def load_history_records(user_email, target_year, target_month, cache_buster=0):
         normalized_email = str(user_email).strip().lower()
         matched_records = []
 
-        for worksheet in spreadsheet.worksheets():
+        # 優先嘗試直接讀取目標工作表，減少 API 呼叫及延遲
+        target_sheet_names = [
+            f"{target_year}年{target_month}月",
+            f"{target_year}年{target_month}",
+            f"{target_month}月",
+        ]
+
+        worksheets_to_scan = []
+        for name in target_sheet_names:
             try:
-                records = worksheet.get_all_records()
+                ws = spreadsheet.worksheet(name)
+                worksheets_to_scan = [ws]
+                break
             except Exception:
+                continue
+
+        # 若找不到指定工作表，再退回掃描所有工作表（成本較高）
+        if not worksheets_to_scan:
+            try:
+                worksheets_to_scan = spreadsheet.worksheets()
+            except Exception:
+                return []
+
+        import time
+        for worksheet in worksheets_to_scan:
+            # 增加簡單重試機制，處理暫時性的 API 錯誤
+            records = None
+            for attempt in range(3):
+                try:
+                    records = worksheet.get_all_records()
+                    break
+                except Exception:
+                    time.sleep(0.5 * (attempt + 1))
+                    records = None
+            if records is None:
                 continue
 
             for record in records:
