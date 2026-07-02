@@ -303,6 +303,18 @@ st.set_page_config(
     layout="centered"
 )
 
+# 縮小不正確原因複選框之間的垂直間距
+st.markdown(
+    """
+    <style>
+    div[data-testid="stCheckbox"] {
+        margin-bottom: -14px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # 檢查登入
 if not check_login():
     st.stop()
@@ -466,9 +478,9 @@ with right_col:
     with st.container(border=True):
         st.markdown("#### 🔍 手部衛生行為觀察")
 
-        col_moment, col_method, col_correct = st.columns(3)
+        col_moment_method, col_correct = st.columns(2)
 
-        with col_moment:
+        with col_moment_method:
             st.markdown("**1️⃣ 手部衛生時機**")
             hand_hygiene_moment = st.radio(
                 "請選擇觀察時機",
@@ -483,7 +495,6 @@ with right_col:
                 label_visibility="collapsed"
             )
 
-        with col_method:
             st.markdown("**2️⃣ 執行方式**")
             hygiene_method = st.radio(
                 "請選擇執行方式",
