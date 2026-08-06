@@ -391,7 +391,8 @@ staff_categories = ["護理師", "照服員", "外籍照服員", "傳送/班長"
 # 隸屬稽核單位/病房是「松齡系列」（松齡1.2區、松齡3區、松齡5.6區、康寧居、日照）以外時，
 # 若受稽核人員類別屬於下列科別專屬人員，受稽核人員單位可以直接依類別判斷帶出，
 # 不需要再手動選擇。
-non_songling_departments = {"松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照"}
+songling_departments = ["松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照"]
+non_songling_departments = set(songling_departments)
 staff_category_to_unit = {
     "內科醫師": "內科", "內科專師": "內科",
     "外科醫師": "外科", "外科專師": "外科",
@@ -479,19 +480,40 @@ with left_col:
             st.session_state.staff_unit_type = "同隸屬稽核單位/病房"
 
         department_is_auditor_only = department in auditor_only_departments
-        # 隸屬稽核單位/病房不是松齡系列時，特定受稽核人員類別可以直接判斷科別，
-        # 不需要再手動選擇受稽核人員單位。
+        mapped_unit = staff_category_to_unit.get(staff_category)
+        # 隸屬稽核單位/病房不是松齡系列、也不是感管中心/立信時，特定受稽核人員類別
+        # 可以直接判斷科別，不需要再手動選擇受稽核人員單位。
         auto_staff_unit = (
-            staff_category_to_unit.get(staff_category)
-            if department not in non_songling_departments
+            mapped_unit
+            if (not department_is_auditor_only) and (department not in non_songling_departments)
             else None
         )
+        staff_unit_resolved = False
 
-        if auto_staff_unit:
+        if department_is_auditor_only and mapped_unit:
+            # 稽核單位是感管中心/立信時，該類別人員有可能是一般科別、也可能是
+            # 派駐在松齡系列的科別人員，所以不能直接鎖定，改成提供「該科別」
+            # 或「松齡系列各單位」讓稽核人員選擇。
+            st.markdown("**🏫 受稽核人員單位**")
+            mapped_or_songling_options = [mapped_unit] + songling_departments
+            if st.session_state.get("staff_unit") not in mapped_or_songling_options:
+                st.session_state.staff_unit = mapped_unit
+            staff_unit = st.selectbox(
+                f"受稽核人員類別為「{staff_category}」，請選擇實際所屬單位",
+                mapped_or_songling_options,
+                index=mapped_or_songling_options.index(st.session_state.staff_unit),
+                key="staff_unit_mapped_or_songling_select",
+                label_visibility="collapsed"
+            )
+            st.session_state.staff_unit_type = "另選隸屬單位"
+            st.session_state.staff_unit = staff_unit
+            staff_unit_resolved = True
+        elif auto_staff_unit:
             st.markdown("**🏫 受稽核人員單位**")
             st.caption(f"✅ 依受稽核人員類別自動判斷為「{auto_staff_unit}」，不需另外選擇。")
             st.session_state.staff_unit_type = "另選隸屬單位"
             st.session_state.staff_unit = auto_staff_unit
+            staff_unit_resolved = True
         elif department_is_auditor_only:
             # 感管中心／立信是稽核單位，不會有「同隸屬稽核單位/病房」的被稽核人員，
             # 所以不顯示這個選項，直接強制走「另選隸屬單位」。
@@ -507,8 +529,8 @@ with left_col:
             )
             st.session_state.staff_unit_type = staff_unit_type
 
-        if auto_staff_unit:
-            pass  # 已經在上面自動帶入，不需要再顯示選單
+        if staff_unit_resolved:
+            pass  # 已經在上面決定好受稽核人員單位，不需要再顯示選單
         elif st.session_state.staff_unit_type == "另選隸屬單位":
             if 'staff_unit' not in st.session_state or st.session_state.staff_unit not in staff_unit_departments:
                 st.session_state.staff_unit = "ER"
