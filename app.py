@@ -386,7 +386,18 @@ staff_unit_departments = [d for d in departments if d not in auditor_only_depart
 staff_categories = ["護理師", "照服員", "外籍照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
                      "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
                      "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
-                     "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"]
+                     "精神科專師", "精神科職能治療", "心理師", "精神科社工", "其他(請註明)"]
+
+# 隸屬稽核單位/病房是「松齡系列」（松齡1.2區、松齡3區、松齡5.6區、康寧居、日照）以外時，
+# 若受稽核人員類別屬於下列科別專屬人員，受稽核人員單位可以直接依類別判斷帶出，
+# 不需要再手動選擇。
+non_songling_departments = {"松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照"}
+staff_category_to_unit = {
+    "內科醫師": "內科", "內科專師": "內科",
+    "外科醫師": "外科", "外科專師": "外科",
+    "精神科醫師": "精神科", "精神科專師": "精神科", "精神科職能治療": "精神科",
+    "心理師": "精神科", "精神科社工": "精神科",
+}
 
 def parse_month_number(month_text):
     month_text = str(month_text).strip()
@@ -468,8 +479,20 @@ with left_col:
             st.session_state.staff_unit_type = "同隸屬稽核單位/病房"
 
         department_is_auditor_only = department in auditor_only_departments
+        # 隸屬稽核單位/病房不是松齡系列時，特定受稽核人員類別可以直接判斷科別，
+        # 不需要再手動選擇受稽核人員單位。
+        auto_staff_unit = (
+            staff_category_to_unit.get(staff_category)
+            if department not in non_songling_departments
+            else None
+        )
 
-        if department_is_auditor_only:
+        if auto_staff_unit:
+            st.markdown("**🏫 受稽核人員單位**")
+            st.caption(f"✅ 依受稽核人員類別自動判斷為「{auto_staff_unit}」，不需另外選擇。")
+            st.session_state.staff_unit_type = "另選隸屬單位"
+            st.session_state.staff_unit = auto_staff_unit
+        elif department_is_auditor_only:
             # 感管中心／立信是稽核單位，不會有「同隸屬稽核單位/病房」的被稽核人員，
             # 所以不顯示這個選項，直接強制走「另選隸屬單位」。
             st.markdown("**🏫 受稽核人員單位**")
@@ -484,7 +507,9 @@ with left_col:
             )
             st.session_state.staff_unit_type = staff_unit_type
 
-        if st.session_state.staff_unit_type == "另選隸屬單位":
+        if auto_staff_unit:
+            pass  # 已經在上面自動帶入，不需要再顯示選單
+        elif st.session_state.staff_unit_type == "另選隸屬單位":
             if 'staff_unit' not in st.session_state or st.session_state.staff_unit not in staff_unit_departments:
                 st.session_state.staff_unit = "ER"
 
