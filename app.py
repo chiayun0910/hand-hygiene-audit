@@ -376,7 +376,12 @@ help_text += "可選擇當月或前一個月" if current_day <= 5 else "只能�
 
 departments = ["ER", "HDR", "OPD", "OPD(市區)", "ICU", "RCW", "7W", "8W", "9W", "11W",
                "內科", "外科", "精神科", "復健科", "放射科", "檢驗科", "感管中心",
-               "松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照", "其他(請註明)"]
+               "松齡1.2區", "松齡3區", "松齡5.6區", "康寧居", "日照", "立信", "其他(請註明)"]
+
+# 感管中心、立信是稽核者所屬單位，不會是被稽核人員所屬單位，
+# 因此「受稽核人員單位」的可選清單要排除這兩個。
+auditor_only_departments = {"感管中心", "立信"}
+staff_unit_departments = [d for d in departments if d not in auditor_only_departments]
 
 staff_categories = ["護理師", "照服員", "外籍照服員", "傳送/班長", "病房服務員", "內科醫師", "外科醫師",
                      "內科專師", "外科專師", "職能治療", "物理治療", "營養師", "呼吸治療師",
@@ -462,22 +467,31 @@ with left_col:
         if 'staff_unit_type' not in st.session_state:
             st.session_state.staff_unit_type = "同隸屬稽核單位/病房"
 
-        staff_unit_type = st.radio(
-            "🏫 受稽核人員單位",
-            ["同隸屬稽核單位/病房", "另選隸屬單位"],
-            key="staff_unit_type_select",
-            horizontal=True
-        )
-        st.session_state.staff_unit_type = staff_unit_type
+        department_is_auditor_only = department in auditor_only_departments
 
-        if staff_unit_type == "另選隸屬單位":
-            if 'staff_unit' not in st.session_state:
+        if department_is_auditor_only:
+            # 感管中心／立信是稽核單位，不會有「同隸屬稽核單位/病房」的被稽核人員，
+            # 所以不顯示這個選項，直接強制走「另選隸屬單位」。
+            st.markdown("**🏫 受稽核人員單位**")
+            st.caption("ℹ️ 感管中心／立信為稽核單位，請直接選擇受稽核人員實際所屬單位。")
+            st.session_state.staff_unit_type = "另選隸屬單位"
+        else:
+            staff_unit_type = st.radio(
+                "🏫 受稽核人員單位",
+                ["同隸屬稽核單位/病房", "另選隸屬單位"],
+                key="staff_unit_type_select",
+                horizontal=True
+            )
+            st.session_state.staff_unit_type = staff_unit_type
+
+        if st.session_state.staff_unit_type == "另選隸屬單位":
+            if 'staff_unit' not in st.session_state or st.session_state.staff_unit not in staff_unit_departments:
                 st.session_state.staff_unit = "ER"
 
             staff_unit = st.selectbox(
                 "選擇單位",
-                departments,
-                index=departments.index(st.session_state.staff_unit) if st.session_state.staff_unit in departments else 0,
+                staff_unit_departments,
+                index=staff_unit_departments.index(st.session_state.staff_unit) if st.session_state.staff_unit in staff_unit_departments else 0,
                 key="staff_unit_select",
                 label_visibility="collapsed"
             )
