@@ -1,4 +1,10 @@
-﻿import streamlit as st
+﻿# ⚠️ 歸檔草稿，非目前部署版本 ⚠️
+# 這是 2026/7/2 晚間開發到一半就中斷的舊版草稿，功能比 app.py 少（例如沒有
+# 「自動帶入本月最新一筆紀錄」功能），且自那之後未再更新。
+# Streamlit Cloud 目前實際部署、執行中的是專案根目錄的 app.py，
+# 之後若要修改稽核表功能，請改 app.py，不要改這支檔案。
+
+import streamlit as st
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 import gspread

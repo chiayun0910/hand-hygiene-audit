@@ -383,6 +383,40 @@ staff_categories = ["護理師", "照服員", "外籍照服員", "傳送/班長"
                      "門診助理員", "語言治療師", "社工師", "醫檢師", "放射師", "精神科醫師",
                      "精神科專師", "精神科職能治療", "心理師", "其他(請註明)"]
 
+def parse_month_number(month_text):
+    month_text = str(month_text).strip()
+    digits = "".join(ch for ch in month_text if ch.isdigit())
+    if not digits:
+        return None
+    try:
+        month_num = int(digits)
+    except ValueError:
+        return None
+    return month_num if 1 <= month_num <= 12 else None
+
+# 必須在下方任何表單元件（尤其是「其他(請註明)」的文字輸入框）建立之前，
+# 就先載入歷史紀錄並套用預設值。Streamlit 不允許在一個 widget 於本次執行
+# 中已經被畫出來之後，再用程式改寫它的 session_state 值（否則會丟出
+# StreamlitAPIException）。因此這裡改用「上一輪已記住的稽核列計月份」
+# （key="audit_month_select"，於下方 selectbox 讀取/寫入）來決定要載入
+# 哪個月份的紀錄，藉此把 apply_record_defaults() 整段搬到所有 widget
+# 建立之前執行。
+pending_audit_month_text = st.session_state.get("audit_month_select", current_month_str)
+selected_audit_month_num = parse_month_number(pending_audit_month_text) or current_date.month
+record_context_key = f"{st.session_state.user_email}|{current_date.year}-{selected_audit_month_num:02d}"
+history_cache_version = st.session_state.get("history_cache_version", 0)
+monthly_records = load_monthly_records(
+    st.session_state.user_email,
+    current_date.year,
+    selected_audit_month_num,
+    history_cache_version,
+)
+st.session_state.latest_monthly_record = monthly_records[0] if monthly_records else None
+if st.session_state.latest_monthly_record_key != record_context_key:
+    apply_record_defaults(st.session_state.latest_monthly_record)
+st.session_state.latest_monthly_record_key = record_context_key
+st.session_state.monthly_history_records = monthly_records
+
 left_col, right_col = st.columns([1, 3])
 
 with left_col:
@@ -393,7 +427,8 @@ with left_col:
             "📅 稽核列計月份",
             available_months,
             index=default_index,
-            help=help_text
+            help=help_text,
+            key="audit_month_select"
         )
 
         department = st.selectbox(
@@ -451,32 +486,6 @@ with left_col:
             st.session_state.staff_unit = staff_unit
         else:
             st.session_state.staff_unit = st.session_state.department
-
-def parse_month_number(month_text):
-    month_text = str(month_text).strip()
-    digits = "".join(ch for ch in month_text if ch.isdigit())
-    if not digits:
-        return None
-    try:
-        month_num = int(digits)
-    except ValueError:
-        return None
-    return month_num if 1 <= month_num <= 12 else None
-
-selected_audit_month_num = parse_month_number(audit_month) or current_date.month
-record_context_key = f"{st.session_state.user_email}|{current_date.year}-{selected_audit_month_num:02d}"
-history_cache_version = st.session_state.get("history_cache_version", 0)
-monthly_records = load_monthly_records(
-    st.session_state.user_email,
-    current_date.year,
-    selected_audit_month_num,
-    history_cache_version,
-)
-st.session_state.latest_monthly_record = monthly_records[0] if monthly_records else None
-if st.session_state.latest_monthly_record_key != record_context_key:
-    apply_record_defaults(st.session_state.latest_monthly_record)
-st.session_state.latest_monthly_record_key = record_context_key
-st.session_state.monthly_history_records = monthly_records
 
 with right_col:
     with st.container(border=True):
